@@ -1,0 +1,7 @@
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/bsp.c:68:6:delay	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/bsp.c:84:10:millis	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/bsp.c:89:6:Error_Handler	0	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/bsp.c:102:6:bspSystemClockConfig	120	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/bsp.c:157:13:bspRtcOscillatorConfig	88	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/bsp.c:195:6:bspPeriphClockConfig	272	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/bsp.c:17:6:bspInit	24	static

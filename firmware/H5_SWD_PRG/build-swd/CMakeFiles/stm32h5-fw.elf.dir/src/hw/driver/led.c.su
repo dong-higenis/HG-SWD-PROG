@@ -1,0 +1,7 @@
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/led.c:54:6:ledActivityPulse	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/led.c:99:6:ledOn	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/led.c:109:6:ledOff	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/led.c:60:6:ledActivityStop	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/led.c:70:6:ledInit	40	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/led.c:25:13:ledActivityTimer	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/led.c:119:6:ledToggle	8	static

@@ -1,0 +1,4 @@
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/osal/thread.c:130:6:cliThread	72	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/osal/thread.c:50:6:threadInit	16	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/osal/thread.c:63:6:threadCreate	32	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/osal/thread.c:88:6:threadBegin	16	static

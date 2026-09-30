@@ -1,0 +1,58 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build-configure",
+      "type": "process",
+      "command": "cmake",
+      "args": [
+        "-S",
+        ".",
+        "-B",
+        "build-swd",
+        "-G",
+        "Ninja"
+      ],
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "label": "build-build",
+      "type": "process",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "build-swd",
+        "--parallel"
+      ],
+      "dependsOn": "build-configure",
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    },
+    {
+      "label": "build-clean",
+      "type": "process",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "build-swd",
+        "--target",
+        "clean"
+      ],
+      "problemMatcher": [],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      }
+    }
+  ]
+}

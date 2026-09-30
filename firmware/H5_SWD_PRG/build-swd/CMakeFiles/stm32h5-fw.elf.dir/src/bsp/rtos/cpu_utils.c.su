@@ -1,0 +1,5 @@
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/cpu_utils.c:57:6:vApplicationIdleHook	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/cpu_utils.c:71:6:vApplicationTickHook	0	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/cpu_utils.c:93:6:StartIdleMonitor	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/cpu_utils.c:106:6:EndIdleMonitor	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/cpu_utils.c:121:10:osGetCPUUsage	0	static

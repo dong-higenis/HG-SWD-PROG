@@ -1,0 +1,7 @@
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/rtos.c:8:6:vApplicationStackOverflowHook	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/rtos.c:15:6:vApplicationMallocFailedHook	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/rtos.c:38:19:HAL_InitTick	48	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/rtos.c:114:6:HAL_SuspendTick	0	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/rtos.c:126:6:HAL_ResumeTick	0	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/rtos.c:143:6:HAL_TIM_PeriodElapsedCallback	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/rtos/rtos.c:158:6:TIM6_IRQHandler	8	static

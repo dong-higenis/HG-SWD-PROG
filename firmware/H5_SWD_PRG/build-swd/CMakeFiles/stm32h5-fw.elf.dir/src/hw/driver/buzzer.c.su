@@ -1,0 +1,7 @@
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/buzzer.c:57:6:buzzerInitTimer	96	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/buzzer.c:33:6:buzzerInit	24	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/buzzer.c:149:6:buzzerOff	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/buzzer.c:20:6:buzzerISR	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/buzzer.c:123:6:buzzerOn	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/buzzer.c:144:6:buzzerBeep	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/buzzer.c:157:6:cliBuzzer	72	static

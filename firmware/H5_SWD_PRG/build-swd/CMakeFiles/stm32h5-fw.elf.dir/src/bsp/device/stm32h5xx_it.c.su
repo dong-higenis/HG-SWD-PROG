@@ -1,0 +1,7 @@
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/device/stm32h5xx_it.c:14:6:NMI_Handler	0	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/device/stm32h5xx_it.c:24:6:HardFault_Handler_C	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/device/stm32h5xx_it.c:35:6:MemManage_Handler_C	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/device/stm32h5xx_it.c:46:6:BusFault_Handler_C	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/device/stm32h5xx_it.c:57:6:UsageFault_Handler_C	8	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/device/stm32h5xx_it.c:77:6:DebugMon_Handler	0	static
+C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/bsp/device/stm32h5xx_it.c:93:6:SysTick_Handler	8	static

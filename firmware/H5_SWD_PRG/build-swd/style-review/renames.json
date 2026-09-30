@@ -1,0 +1,110 @@
+{
+  "src/ap/modules/prog/prog.c": {
+    "draw": "progDraw",
+    "validId": "progIsValidId",
+    "fail": "progFail",
+    "ioFail": "progIoFail",
+    "readFile": "progReadFile",
+    "openFile": "progOpenFile",
+    "closeFile": "progCloseFile",
+    "closeImage": "progCloseImage",
+    "manifest": "progLoadManifest",
+    "scan": "progScanProjects",
+    "progress": "progProgress",
+    "readImage": "progReadImage",
+    "loadLoader": "progLoadLoader",
+    "preflight": "progPreflight",
+    "runJob": "progRunJob",
+    "icon": "progDrawIcon",
+    "header": "progDrawHeader",
+    "footer": "progDrawFooter",
+    "selection": "progDrawSelection"
+  },
+  "src/ap/modules/prog/prog_inspect.c": {
+    "u16": "progReadLe16",
+    "u32": "progReadLe32",
+    "range": "progIsRangeValid",
+    "readAt": "progReadAt",
+    "trim": "progTrim",
+    "copy": "progCopyString",
+    "hex32": "progParseHex32"
+  },
+  "src/hw/driver/swd.c": {
+    "pinMode": "swdPinMode",
+    "setModeBits": "swdSetModeBits"
+  },
+  "src/hw/driver/led.c": {
+    "activityTimer": "ledActivityTimer"
+  },
+  "src/bsp/bsp.c": {
+    "SystemClock_Config": "bspSystemClockConfig",
+    "PeriphCommonClock_Config": "bspPeriphClockConfig",
+    "RtcOscillator_Config": "bspRtcOscillatorConfig"
+  },
+  "src/hw/driver/spi_flash.c": {
+    "command": "spiFlashCommand",
+    "receive": "spiFlashReceive",
+    "transmit": "spiFlashTransmit",
+    "readStatus": "spiFlashReadStatus",
+    "waitReady": "spiFlashWaitReady",
+    "writeEnable": "spiFlashWriteEnable",
+    "rangeValid": "spiFlashIsRangeValid",
+    "eraseUnit": "spiFlashEraseUnit",
+    "cliCmd": "cliSpiFlash"
+  },
+  "src/hw/driver/swd/swd_transport.c": {
+    "clockCycle": "swdWireClockCycle",
+    "writeBit": "swdWireWriteBit",
+    "readBit": "swdWireReadBit",
+    "parity32": "swdWireParity32",
+    "lineReset": "swdWireLineReset"
+  },
+  "src/hw/driver/swd/swd_probe.c": {
+    "transfer": "swdDapTransfer",
+    "dpWrite": "swdDapDpWrite",
+    "apSelect": "swdDapApSelect",
+    "apRead": "swdDapApRead",
+    "memWords": "swdDapMemWords"
+  },
+  "src/hw/driver/swd/swd_ramtest.c": {
+    "coreRead": "swdRamTestCoreRead",
+    "waitHalted": "swdRamTestWaitHalted",
+    "pattern": "swdRamTestPattern",
+    "restoreCore": "swdRamTestRestoreCore",
+    "restoreRam": "swdRamTestRestoreRam",
+    "testRam": "swdRamTestTestRam"
+  },
+  "src/hw/driver/swd/swd_exectest.c": {
+    "readMem": "swdExecTestReadMem",
+    "writeMem": "swdExecTestWriteMem",
+    "state": "swdExecTestState",
+    "waitState": "swdExecTestWaitState",
+    "regRead": "swdExecTestRegRead",
+    "regWrite": "swdExecTestRegWrite",
+    "writeChecked": "swdExecTestWriteChecked",
+    "prepare": "swdExecTestPrepare",
+    "execute": "swdExecTestExecute",
+    "cleanup": "swdExecTestCleanup"
+  },
+  "src/hw/driver/swd/swd_program.c": {
+    "ioResult": "swdProgramIoResult",
+    "rd": "swdProgramRead32",
+    "wr": "swdProgramWrite32",
+    "readWords": "swdProgramReadWords",
+    "writeWords": "swdProgramWriteWords",
+    "crcUpdate": "swdProgramCrcUpdate",
+    "notify": "swdProgramNotify",
+    "finishPhase": "swdProgramFinishPhase",
+    "stage": "swdProgramSetStage",
+    "state": "swdProgramCheckState",
+    "waitReg": "swdProgramWaitRegister",
+    "regRead": "swdProgramReadRegister",
+    "regWrite": "swdProgramWriteRegister",
+    "resetHalt": "swdProgramResetHalt",
+    "flashStatus": "swdProgramFlashStatus",
+    "tuneSpeed": "swdProgramTuneSpeed",
+    "call": "swdProgramCallLoader",
+    "program": "swdProgramExecute",
+    "run": "swdProgramRun"
+  }
+}
