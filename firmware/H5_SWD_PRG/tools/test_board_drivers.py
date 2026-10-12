@@ -39,17 +39,17 @@ typedef struct {
  bool (*sendBuffer)(uint8_t*,uint32_t,uint32_t);
 } lcd_driver_t;
 static uint8_t commands[256], pixels[1024];
-static int count, pages, fail_command=-1, fail_page=-1, callbacks;
+static int count, pages, page, fail_command=-1, fail_page=-1, callbacks;
 static void delay(uint32_t ms) {(void)ms;}
 static bool i2cBegin(int ch,int rate) {assert(ch==0 && rate==400);return true;}
 static bool i2cIsDeviceReady(int ch,int addr) {assert(addr==0x3c);return true;}
 static bool i2cWriteByte(int ch,int addr,int ctrl,uint8_t b,int timeout) {
- if(count==fail_command)return false; commands[count++]=b;return true;
+ if(count==fail_command)return false; if((b&0xf8)==0xb0)page=b&7; commands[count++]=b;return true;
 }
 static bool i2cWriteBytes(int ch,int addr,int ctrl,uint8_t *data,int length,int timeout) {
  assert(ctrl==0x40 && length==128);
  if(pages==fail_page)return false;
- memcpy(pixels+128*(pages++%8),data,length);return true;
+ pages++;memcpy(pixels+128*page,data,length);return true;
 }
 static void done(void) {callbacks++;}
 '''
@@ -62,13 +62,16 @@ int main(void) {
  uint16_t frame[8192]={0};frame[0]=0xffff;frame[8191]=0xffff;
  count=pages=0;d.setCallBack(done);
  assert(d.sendBuffer((uint8_t*)frame,sizeof(frame),100));
- assert(pages==8 && callbacks==1 && pixels[0]==1 && pixels[1023]==128);
- count=pages=0;fail_page=3;
+ assert(pages==2 && callbacks==1 && pixels[0]==1 && pixels[1023]==128); /* Only the changed pages. */
+ count=pages=0;assert(d.sendBuffer((uint8_t*)frame,sizeof(frame),100));assert(pages==0);
+ frame[4000]=0xffff;count=pages=0;fail_page=0;
  assert(!d.sendBuffer((uint8_t*)frame,sizeof(frame),100));
- assert(callbacks==2);
+ assert(callbacks==3);
+ count=pages=0;fail_page=-1;assert(d.sendBuffer((uint8_t*)frame,sizeof(frame),100));
+ assert(pages==8 && pixels[4000/128/8*128+4000%128]==1<<(4000/128%8)); /* A failed write resends everything. */
  count=pages=0;fail_page=-1;fail_command=2;
  assert(!d.init());assert(pages==0);
- puts("PASS OLED: page mode, clear, pixel packing, callback, I2C error propagation");
+ puts("PASS OLED: page mode, clear, pixel packing, changed-page updates, callback, I2C error propagation and full resend");
 }
 ''')
 

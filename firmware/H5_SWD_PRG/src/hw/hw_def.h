@@ -4,7 +4,7 @@
 #include "bsp.h"
 #include "assert_def.h"
 
-#define _DEF_FIRMWATRE_VERSION    "V260928R1"
+#define _DEF_FIRMWATRE_VERSION    "V261006R2"
 #define _DEF_BOARD_NAME           "HG-SWD-PROG"
 
 #define _USE_HW_ASSERT

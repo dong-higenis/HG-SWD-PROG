@@ -1,0 +1,7 @@
+Espressif esp-serial-flasher v2.1.0
+https://github.com/espressif/esp-serial-flasher
+Commit: 24997fe693ff17e6598d7eb1d37af312752100aa
+Apache-2.0, see LICENSE.
+Unmodified UART/ROM core and headers, plus ESP32/S3/C3 stubs from src/stubs.
+Stub binaries: esp-flasher-stub v1.3.0 (upstream generated sources).
+No eFuse burn code linked.

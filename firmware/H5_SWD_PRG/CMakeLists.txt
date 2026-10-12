@@ -53,6 +53,18 @@ set(HAL_SOURCES
 add_executable(${EXECUTABLE} src/main.cpp ${APP_SOURCES} ${RTOS_SOURCES}
   ${FATFS_SOURCES} ${HAL_SOURCES}
   src/lib/FreeRTOS/Source/portable/MemMang/heap_4.c)
+# Pinned upstream UART ROM/stub protocol; board/application code stays in our modules.
+file(GLOB ESP_LOADER_SOURCES CONFIGURE_DEPENDS src/lib/esp-serial-flasher/src/*.c)
+target_sources(${EXECUTABLE} PRIVATE ${ESP_LOADER_SOURCES}
+  src/lib/esp-serial-flasher/src/stubs/esp_stub_esp32.c
+  src/lib/esp-serial-flasher/src/stubs/esp_stub_esp32s3.c
+  src/lib/esp-serial-flasher/src/stubs/esp_stub_esp32c3.c)
+target_include_directories(${EXECUTABLE} PRIVATE
+  src/lib/esp-serial-flasher/include src/lib/esp-serial-flasher/private_include)
+target_compile_definitions(${EXECUTABLE} PRIVATE
+  SERIAL_FLASHER_LOG_LEVEL=2 SERIAL_FLASHER_WRITE_BLOCK_RETRIES=1)
+set_source_files_properties(src/hw/driver/esp/esp_port.c PROPERTIES COMPILE_OPTIONS "-O2")
+
 target_include_directories(${EXECUTABLE} PRIVATE
   src src/ap src/ap/modules src/ap/modules/common
   src/bsp src/bsp/device src/bsp/rtos

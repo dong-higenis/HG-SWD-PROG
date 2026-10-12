@@ -33,6 +33,8 @@ static void     ssd1315DrawPixel(uint8_t x, uint8_t y, uint16_t color);
 
 
 static uint8_t ssd1315_buffer[SSD1315_WIDTH * SSD1315_HEIGHT / 8];
+static uint8_t ssd1315_shown[SSD1315_WIDTH * SSD1315_HEIGHT / 8]; /* What the panel holds after the last good frame. */
+static bool    ssd1315_shown_valid = false;
 
 bool ssd1315Init(void)
 {
@@ -64,6 +66,7 @@ bool ssd1315Reset(void)
 {
   bool ret;
 
+  ssd1315_shown_valid = false;
   delay(25);
   ret = i2cBegin(i2c_ch, 400);
 
@@ -155,18 +158,24 @@ bool ssd1315UpdateDraw(void)
 {
   uint8_t i;
 
+  /* Unchanged pages are skipped: an animation that moves one strip costs one strip of I2C time. */
   for (i = 0; i < 8; i++)
   {
-    if (!ssd1315WriteCmd(0xB0 + i) || !ssd1315WriteCmd(0x00) || !ssd1315WriteCmd(0x10))
+    uint8_t *page = &ssd1315_buffer[SSD1315_WIDTH * i];
+    if (ssd1315_shown_valid && memcmp(page, &ssd1315_shown[SSD1315_WIDTH * i], SSD1315_WIDTH) == 0)
     {
-      return false;
+      continue;
     }
 
-    if (i2cWriteBytes(i2c_ch, i2c_dev, 0x40, &ssd1315_buffer[SSD1315_WIDTH * i], SSD1315_WIDTH, 100) == false)
+    if (!ssd1315WriteCmd(0xB0 + i) || !ssd1315WriteCmd(0x00) || !ssd1315WriteCmd(0x10) ||
+        i2cWriteBytes(i2c_ch, i2c_dev, 0x40, page, SSD1315_WIDTH, 100) == false)
     {
+      ssd1315_shown_valid = false; /* Panel contents unknown: resend everything next time. */
       return false;
     }
+    memcpy(&ssd1315_shown[SSD1315_WIDTH * i], page, SSD1315_WIDTH);
   }
+  ssd1315_shown_valid = true;
 
   return true;
 }
