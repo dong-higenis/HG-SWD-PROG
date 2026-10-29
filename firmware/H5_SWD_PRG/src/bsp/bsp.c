@@ -4,6 +4,7 @@
 
 static void bspSystemClockConfig(void);
 static void bspPeriphClockConfig(void);
+static void bspMpuConfig(void);
 #ifndef _NOT_USE_RTC
 static void bspRtcOscillatorConfig(void);
 #endif
@@ -45,6 +46,8 @@ bool bspInit(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
 
+  bspMpuConfig();
+
   bsp_init_stage  = BSP_INIT_ICACHE;
   bsp_init_status = HAL_ICACHE_Enable();
   if (bsp_init_status != HAL_OK)
@@ -63,6 +66,30 @@ bool bspInit(void)
 
   bsp_init_stage = BSP_INIT_READY;
   return ret;
+}
+
+/* The read-only area (UID, flash size, package) must not be read through ICACHE: a cached read HardFaults.
+ * Region 0 makes it normal non-cacheable memory; everything else keeps the default map. */
+static void bspMpuConfig(void)
+{
+  MPU_Attributes_InitTypeDef attributes = {0};
+  MPU_Region_InitTypeDef     region     = {0};
+
+  HAL_MPU_Disable();
+  attributes.Number     = MPU_ATTRIBUTES_NUMBER0;
+  attributes.Attributes = MPU_NOT_CACHEABLE;
+  HAL_MPU_ConfigMemoryAttributes(&attributes);
+
+  region.Enable           = MPU_REGION_ENABLE;
+  region.Number           = MPU_REGION_NUMBER0;
+  region.BaseAddress      = 0x08FFF000;
+  region.LimitAddress     = 0x08FFFFFF;
+  region.AttributesIndex  = MPU_ATTRIBUTES_NUMBER0;
+  region.AccessPermission = MPU_REGION_ALL_RO;
+  region.DisableExec      = MPU_INSTRUCTION_ACCESS_DISABLE;
+  region.IsShareable      = MPU_ACCESS_NOT_SHAREABLE;
+  HAL_MPU_ConfigRegion(&region);
+  HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
 }
 
 void delay(uint32_t ms)

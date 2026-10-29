@@ -1,5 +1,6 @@
 #include "system.h"
 #include "prog/prog.h"
+#include "net/net.h"
 
 
 static SemaphoreHandle_t mutex_start;
@@ -42,6 +43,7 @@ void systemMain(void)
       {
         sdUpdate();
         progUpdate();
+        netUpdate();
         cliUnlockResources();
       }
     }

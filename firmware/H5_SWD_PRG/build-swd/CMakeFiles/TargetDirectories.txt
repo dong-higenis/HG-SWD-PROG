@@ -1,3 +1,0 @@
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/build-swd/CMakeFiles/stm32h5-fw.elf.dir
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/build-swd/CMakeFiles/edit_cache.dir
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/build-swd/CMakeFiles/rebuild_cache.dir

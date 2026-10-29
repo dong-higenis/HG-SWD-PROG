@@ -1,0 +1,5 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/include/hangul/han.c:112:6:hanUniFontLoad	28	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/include/hangul/han.c:159:6:hanEngFontLoad	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/include/hangul/han.c:174:10:hanCnvCodeWan2Johab	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/include/hangul/han.c:71:6:hanWanFontLoad	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/include/hangul/han.c:23:10:hanFontLoad	16	static

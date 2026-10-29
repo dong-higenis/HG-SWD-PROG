@@ -1,8 +1,0 @@
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/src/swtimer.c:40:6:swtimerInit	0	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/src/swtimer.c:66:6:swtimerISR	8	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/src/swtimer.c:96:6:swtimerSet	4	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/src/swtimer.c:107:6:swtimerStart	0	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/src/swtimer.c:115:6:swtimerStop	0	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/src/swtimer.c:122:6:swtimerReset	0	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/src/swtimer.c:130:18:swtimerGetHandle	0	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/common/hw/src/swtimer.c:142:10:swtimerGetCounter	0	static

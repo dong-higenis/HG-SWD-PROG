@@ -1,6 +1,0 @@
-name=H723 GFX firmware
-device=STM32H72x/STM32H73x
-algo=/prog/loaders/st/0x483.stldr
-image=app.bin @ 0x08000000
-crc32=0x123C5145
-loader_crc32=0x32674EA9

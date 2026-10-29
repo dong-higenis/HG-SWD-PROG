@@ -1,0 +1,4 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/fatfs/ffsystem.c:79:5:ff_mutex_create	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/fatfs/ffsystem.c:120:6:ff_mutex_delete	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/fatfs/ffsystem.c:152:5:ff_mutex_take	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/fatfs/ffsystem.c:185:6:ff_mutex_give	8	static

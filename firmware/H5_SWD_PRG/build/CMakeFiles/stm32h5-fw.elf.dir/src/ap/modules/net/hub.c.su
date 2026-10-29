@@ -1,0 +1,17 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:77:13:hubJsonText	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:295:17:hubCrc	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:19:13:hubJsonCopy	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:45:13:hubJsonString	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:314:20:hubSdError	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:24:13:hubJsonEmit	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:195:13:hubIsSafe	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:183:14:hubTrim	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:309:20:hubNetError	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:321:20:hubOpen	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:379:16:hubMkdir	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:385:20:hubDownload	600	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:12:6:hubJsonBegin	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:85:6:hubJsonFeed	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:212:13:hubLatestParse	48	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:338:13:hubFetchList	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/hub.c:460:13:hubInstall	528	static

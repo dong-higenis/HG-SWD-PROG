@@ -1,0 +1,4 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/common/core/util_core.c:7:10:utilConvert8ToU32	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/common/core/util_core.c:20:10:utilConvert8ToU16	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/common/core/util_core.c:72:6:utilUpdateCrc	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/common/core/util_core.c:83:10:utilCalcCRC	24	static

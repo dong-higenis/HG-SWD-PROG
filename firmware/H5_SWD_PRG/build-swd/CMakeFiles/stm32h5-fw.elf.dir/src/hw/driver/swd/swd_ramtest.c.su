@@ -1,7 +1,0 @@
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_ramtest.c:57:17:swdRamTestPattern	0	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_ramtest.c:21:18:swdRamTestCoreRead	16	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_ramtest.c:150:18:swdRamTestTestRam	32	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_ramtest.c:108:18:swdRamTestRestoreRam	32	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_ramtest.c:39:18:swdRamTestWaitHalted	16	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_ramtest.c:72:18:swdRamTestRestoreCore	16	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_ramtest.c:213:11:swdRamTestH723	80	static

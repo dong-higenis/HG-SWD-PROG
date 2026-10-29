@@ -19,8 +19,9 @@
 #define      HW_LED_MAX_CH          1
 
 #define _USE_HW_UART
-#define      HW_UART_MAX_CH         1
+#define      HW_UART_MAX_CH         2
 #define      HW_UART_CH_DEBUG      _DEF_UART1
+#define      HW_UART_CH_NET        _DEF_UART2   /* USART6 to the ESP32-S3 network module */
 
 #define _USE_HW_CLI
 #define      HW_CLI_CMD_LIST_MAX    32
@@ -93,6 +94,8 @@ typedef enum
 typedef enum
 {
   SD_DETECT,
+  TARGET_3V3,   /* PB5 high: 3V_OUT on the target connector */
+  TARGET_5V,    /* PA9 high: 5V_OUT on the target connector */
 
   GPIO_PIN_MAX
 } GpioPinName_t;

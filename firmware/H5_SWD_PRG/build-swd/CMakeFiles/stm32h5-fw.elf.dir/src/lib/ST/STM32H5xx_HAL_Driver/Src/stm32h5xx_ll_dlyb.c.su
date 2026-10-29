@@ -1,3 +1,0 @@
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/lib/ST/STM32H5xx_HAL_Driver/Src/stm32h5xx_ll_dlyb.c:110:6:LL_DLYB_SetDelay	16	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/lib/ST/STM32H5xx_HAL_Driver/Src/stm32h5xx_ll_dlyb.c:133:6:LL_DLYB_GetDelay	16	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/lib/ST/STM32H5xx_HAL_Driver/Src/stm32h5xx_ll_dlyb.c:151:10:LL_DLYB_GetClockPeriod	24	static

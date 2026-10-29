@@ -1,0 +1,11 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:9:17:netStoreCrc	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:29:13:netStoreScramble	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:41:13:netStorePut	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:48:13:netStoreGet	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:23:6:netStoreSetKey	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:57:6:netStoreEncode	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:77:6:netStoreDecode	912	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:110:6:netStoreLoad	576	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:127:6:netStoreSave	576	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:158:13:netStorePassword	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_store.c:170:6:netStoreRemember	128	static

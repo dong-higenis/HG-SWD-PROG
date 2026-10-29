@@ -1,0 +1,10 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/reset.c:32:6:resetInit	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/reset.c:93:6:resetLog	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/reset.c:110:6:resetToReset	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/reset.c:115:10:resetGetBits	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/reset.c:120:6:resetSetBits	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/reset.c:125:6:resetSetBootMode	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/reset.c:137:6:cliReset	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/reset.c:98:6:resetToBoot	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/reset.c:104:6:resetToUpdate	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/reset.c:131:10:resetGetBootMode	0	static

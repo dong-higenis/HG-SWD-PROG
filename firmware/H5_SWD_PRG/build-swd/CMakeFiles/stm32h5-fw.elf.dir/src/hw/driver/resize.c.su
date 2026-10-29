@@ -1,4 +1,0 @@
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/resize.c:56:6:resizeImage	136	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/resize.c:123:38:resizeImageFast	120	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/resize.c:245:38:resizeImageFastGray	96	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/resize.c:335:38:resizeImageNearest	56	static

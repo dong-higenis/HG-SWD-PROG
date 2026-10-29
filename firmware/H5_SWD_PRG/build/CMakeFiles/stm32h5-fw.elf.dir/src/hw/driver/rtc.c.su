@@ -1,0 +1,12 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:21:6:rtcInit	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:50:6:rtcGetInfo	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:73:6:rtcGetTime	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:92:6:rtcGetDate	80	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:126:6:rtcSetTime	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:148:6:rtcSetDate	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:267:6:cliRtc	40	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:170:6:HAL_RTC_MspInit	280	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:191:6:rtcSetReg	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:204:6:rtcGetReg	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:217:6:rtcGetTimestamp	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/rtc.c:257:6:HAL_RTC_MspDeInit	0	static

@@ -1,0 +1,6 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/gpio.c:57:6:gpioPinMode	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/gpio.c:112:6:gpioPinWrite	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/gpio.c:35:6:gpioInit	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/gpio.c:129:6:gpioPinRead	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/gpio.c:158:6:cliGpio	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/gpio.c:146:6:gpioPinToggle	8	static

@@ -1,0 +1,13 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:32:6:fatfsMount	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:14:6:fatfsInit	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:45:6:fatfsUnMount	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:52:6:fatfsIsMount	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:57:6:fatfsExist	288	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:66:6:fatfsCreateDir	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:73:6:fatfsDelete	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:80:6:fatfsOpen	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:87:6:fatfsClose	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:92:6:fatfsSync	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:97:6:fatfsWrite	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:120:6:cliFs	624	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/fatfs.c:108:6:fatfsRead	16	static

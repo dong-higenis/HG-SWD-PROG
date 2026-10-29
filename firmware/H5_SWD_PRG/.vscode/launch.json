@@ -6,7 +6,7 @@
   "configurations": [
     {
       "cwd": "${workspaceFolder}",
-      "executable": "./build-swd/stm32h5-fw.elf",
+      "executable": "./build/stm32h5-fw.elf",
       "name": "Debug with STLINK",
       "request": "launch",
       "preLaunchTask": "build-build",
@@ -19,12 +19,12 @@
       "osx": {
         "serverpath": "/opt/ST/STM32CubeCLT_1.20.0/STLink-gdb-server/bin/ST-LINK_gdbserver",
         "stm32cubeprogrammer": "/opt/ST/STM32CubeCLT_1.20.0/STM32CubeProgrammer/bin",
-        "svdFile": "/opt/ST/STM32CubeCLT_1.20.0/STMicroelectronics_CMSIS_SVD/STM32H563.svd"
+        "svdFile": "/opt/ST/STM32CubeCLT_1.20.0/STMicroelectronics_CMSIS_SVD/STM32H562.svd"
       },       
       "windows": {
         "serverpath": "C:/ST/STM32CubeCLT_1.20.0/STLink-gdb-server/bin/ST-LINK_gdbserver.exe",
         "stm32cubeprogrammer": "C:/ST/STM32CubeCLT_1.20.0/STM32CubeProgrammer/bin",
-        "svdFile": "C:/ST/STM32CubeCLT_1.20.0/STMicroelectronics_CMSIS_SVD/STM32H563.svd"
+        "svdFile": "C:/ST/STM32CubeCLT_1.20.0/STMicroelectronics_CMSIS_SVD/STM32H562.svd"
       },       
       "runToEntryPoint": "main",  
     }   

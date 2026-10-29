@@ -1,0 +1,5 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_target.c:11:27:progTargetInfo	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_target.c:16:13:progTargetLabel	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_target.c:22:15:progTargetFromDevice	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_target.c:34:15:progTargetFromChip	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_target.c:46:15:progTargetFromEsp	0	static

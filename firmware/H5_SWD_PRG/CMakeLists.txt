@@ -76,7 +76,7 @@ target_include_directories(${EXECUTABLE} PRIVATE
   src/lib/FreeRTOS/Source/portable/GCC/ARM_CM33_NTZ/non_secure)
 
 target_compile_definitions(${EXECUTABLE} PRIVATE
-  -DSTM32H563xx
+  -DSTM32H562xx
   -DUSE_HAL_DRIVER  
   )
 
@@ -109,7 +109,7 @@ set_source_files_properties(
   PROPERTIES COMPILE_OPTIONS "-O3")
 
 target_link_options(${EXECUTABLE} PRIVATE
-  "-T${CMAKE_CURRENT_SOURCE_DIR}/src/bsp/ldscript/STM32H563xx_FLASH.ld"
+  "-T${CMAKE_CURRENT_SOURCE_DIR}/src/bsp/ldscript/STM32H562xx_FLASH.ld"
 
   -mcpu=cortex-m33
   -mthumb

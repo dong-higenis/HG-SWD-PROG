@@ -1,0 +1,3 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/slip.c:29:20:SLIP_receive_packet	48	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/slip.c:79:20:SLIP_send	48	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/slip.c:117:20:SLIP_send_delimiter	16	static

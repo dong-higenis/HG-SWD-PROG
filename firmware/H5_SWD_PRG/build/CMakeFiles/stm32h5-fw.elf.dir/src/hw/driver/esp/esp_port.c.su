@@ -1,0 +1,15 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:289:17:espPortRemaining	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:282:13:espPortStartTimer	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:310:27:espPortRead	48	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:296:13:espPortDelay	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:302:27:espPortWrite	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:339:13:espPortLog	168	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:272:13:espPortReset	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:228:27:espPortChangeRate	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:260:13:espPortBoot	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:35:6:EXTI1_IRQHandler	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:54:6:TIM2_IRQHandler	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:122:6:espPortStats	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:131:6:espPortClose	40	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:156:27:espPortInit	328	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/esp/esp_port.c:361:20:espPortGet	0	static

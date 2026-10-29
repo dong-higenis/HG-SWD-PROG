@@ -22,6 +22,8 @@ typedef struct
 const gpio_tbl_t gpio_tbl[GPIO_MAX_CH] =
 {
   {GPIOA, GPIO_PIN_8, _DEF_INPUT_PULLUP, GPIO_PIN_SET, GPIO_PIN_RESET, _DEF_HIGH, NAME_DEF(SD_DETECT)},
+  {GPIOB, GPIO_PIN_5, _DEF_OUTPUT,       GPIO_PIN_SET, GPIO_PIN_RESET, _DEF_LOW,  NAME_DEF(TARGET_3V3)},
+  {GPIOA, GPIO_PIN_9, _DEF_OUTPUT,       GPIO_PIN_SET, GPIO_PIN_RESET, _DEF_LOW,  NAME_DEF(TARGET_5V)},
 };
 
 
@@ -35,6 +37,7 @@ bool gpioInit(void)
   bool ret = true;
 
   __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
 
 

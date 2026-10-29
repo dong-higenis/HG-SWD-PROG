@@ -1,0 +1,8 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/protocol_uart.c:130:27:uart_mem_begin_cmd	48	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/protocol_uart.c:121:27:uart_send_stub_ack	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/protocol_uart.c:115:27:uart_recv_stub_packet	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/protocol_uart.c:40:27:uart_spi_attach	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/protocol_uart.c:69:27:uart_check_response	104	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/protocol_uart.c:45:27:uart_send_cmd	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/protocol_uart.c:19:27:uart_initialize_conn	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/protocol_uart.c:156:34:esp_loader_get_serial_ops	0	static

@@ -1,0 +1,9 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_probe.c:160:18:swdDapMemWords	72	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_probe.c:78:11:swdDapClearErrors	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_probe.c:83:11:swdMemRead32	40	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_probe.c:118:11:swdMemWrite32	40	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_probe.c:233:11:swdMemReadWords	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_probe.c:238:11:swdMemWriteWords	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_probe.c:243:11:swdH723Connect	96	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_probe.c:354:11:swdProbeH723	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_probe.c:374:13:swdErrStr	0	static

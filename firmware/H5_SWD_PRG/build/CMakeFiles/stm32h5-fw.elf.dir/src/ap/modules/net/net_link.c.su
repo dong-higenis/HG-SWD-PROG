@@ -1,0 +1,7 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_link.c:9:10:netLinkCrc	4	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_link.c:23:10:netLinkEncode	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_link.c:41:6:netLinkRxReset	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_link.c:47:6:netLinkRxFeed	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_link.c:75:6:netLinkBind	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_link.c:80:6:netLinkSeed	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/net/net_link.c:85:9:netLinkCall	48	static

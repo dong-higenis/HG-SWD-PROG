@@ -1,0 +1,6 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/fatfs/diskio.c:14:9:disk_status	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/fatfs/diskio.c:25:9:disk_initialize	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/fatfs/diskio.c:45:9:disk_read	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/fatfs/diskio.c:91:9:disk_write	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/fatfs/diskio.c:142:9:disk_ioctl	56	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/fatfs/diskio.c:200:7:get_fattime	0	static

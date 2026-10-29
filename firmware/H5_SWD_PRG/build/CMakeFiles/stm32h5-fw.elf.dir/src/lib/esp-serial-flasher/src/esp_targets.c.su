@@ -1,0 +1,13 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:477:27:spi_config_unsupported	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:458:27:spi_config_esp32xx	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:428:27:spi_config_esp32	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:500:27:read_efuse_word	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:335:27:get_esp_target_data	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:340:20:loader_detect_chip	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:390:20:loader_read_spi_config	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:396:20:loader_read_mac	24	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:506:20:loader_read_chip_revision	48	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:665:6:encryption_in_begin_flash_cmd	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:670:15:target_from_chip_id	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:681:10:esp_targets_get_efuse_base	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/lib/esp-serial-flasher/src/esp_targets.c:689:20:get_crystal_frequency_esp32c2	16	static

@@ -1,0 +1,5 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_power.c:10:17:progPowerCrc	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_power.c:37:13:progPowerDecode	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_power.c:24:13:progPowerEncode	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_power.c:50:6:progPowerLoad	584	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_power.c:67:6:progPowerSave	584	static

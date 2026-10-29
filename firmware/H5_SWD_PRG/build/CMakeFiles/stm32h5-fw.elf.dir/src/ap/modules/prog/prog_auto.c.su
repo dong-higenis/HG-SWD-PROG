@@ -1,0 +1,6 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_auto.c:4:17:progAutoCrc	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_auto.c:18:17:progAutoRead32	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_auto.c:23:13:progAutoWrite32	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_auto.c:31:6:progAutoNewer	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_auto.c:37:6:progAutoDecode	128	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/prog_auto.c:72:6:progAutoEncode	24	static

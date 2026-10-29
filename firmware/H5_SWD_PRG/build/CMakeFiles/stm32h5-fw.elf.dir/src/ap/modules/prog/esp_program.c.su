@@ -1,0 +1,12 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:36:22:espProgramTarget	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:141:13:espProgramProgress	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:191:13:espProgramBaudValid	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:83:13:espProgramConnect	32	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:153:13:espProgramIdentify	40	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:59:26:espProgramStub	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:197:13:espProgramTune	64	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:9:13:espProgramError	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:114:13:espProgramFinish	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:126:6:espProgramProbe	16	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:261:6:espProgramRun	168	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_program.c:380:6:espProgramErase	32	static

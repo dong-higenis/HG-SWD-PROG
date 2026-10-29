@@ -1,0 +1,6 @@
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_project.c:19:13:espProjectHex	4	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_project.c:5:14:espProjectTrim	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_project.c:43:6:espProjectIsManifest	8	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_project.c:81:13:espProjectChipName	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_project.c:96:10:espProjectChipId	0	static
+C:/work/git/HG/H5/HG-SWD-PROG/firmware/H5_SWD_PRG/src/ap/modules/prog/esp_project.c:101:13:espProjectParse	64	static

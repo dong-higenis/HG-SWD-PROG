@@ -18,9 +18,9 @@ void     swdWireConnect(void);
 void     swdWireIdle(uint32_t cycles);
 uint32_t swdWireTransfer(bool ap, bool read, uint8_t addr, uint32_t *data);
 
-/* On the H563, inline the per-bit register operations. Native wire tests keep
+/* On the H562, inline the per-bit register operations. Native wire tests keep
  * the same protocol through instrumented port functions. */
-#if defined(STM32H563xx)
+#if defined(STM32H562xx)
 extern volatile uint32_t *swd_tick_counter;
 extern uint32_t           swd_half_ticks;
 

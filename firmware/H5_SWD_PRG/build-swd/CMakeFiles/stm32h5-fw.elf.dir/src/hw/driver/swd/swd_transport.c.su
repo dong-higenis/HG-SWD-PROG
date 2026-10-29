@@ -1,3 +1,0 @@
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_transport.c:43:6:swdWireIdle	16	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_transport.c:64:6:swdWireConnect	32	static
-C:/work/git/STM32-H5-SWD-PROG/firmware/H5_SWD_PRG/src/hw/driver/swd/swd_transport.c:75:10:swdWireTransfer	48	static

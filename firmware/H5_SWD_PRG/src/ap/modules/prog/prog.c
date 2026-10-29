@@ -1,40 +1,88 @@
 #include "module.h"
 #include "fatfs.h"
 #include "prog.h"
-#include "prog_inspect.h"
+#include "prog_catalog.h"
+#include "prog_storage.h"
 #include "esp_program.h"
 #include "prog_auto.h"
+#include "prog_keyboard.h"
+#include "prog_power.h"
+#include "net/net.h"
+#include "net/hub.h"
 #include "swd/swd_program.h"
 #include "lcd/lcd_fonts.h"
 #include <math.h>
 #include <string.h>
 
-#define PROJECTS    16
-#define ID_SIZE     25
 #define LOADER_PATH "/prog/loaders/st/0x483.stldr"
 #define LOADER_CRC  0x32674EA9U
 #define FRAME_MS    25 /* ~30 fps; one I2C OLED frame takes about 25 ms. */
 #define SLIDE_MS    140
 #define RUN_FRAME_MS 50 /* Progress screen; mostly the bar's two pages change, about 6 ms of I2C each. */
+#define SCROLL_MS   400 /* A selected label that does not fit scrolls one character per step. */
 #define BAR_W       116 /* Inside of the progress capsule. */
 #define PILL_W      104
 #define PILL_H      32
 #define PILL_R      7
+#define REPEAT_MS   400 /* Held UP/DN on the keyboard: first repeat, then every REPEAT_STEP_MS. */
+#define REPEAT_STEP_MS 70
+#define MENU_HOLD_MS 600 /* Held SEL opens the keyboard menu. */
+#define NET_POLL_MS 1000
+#define SCAN_MS     15000
+#define WIFI_JOIN_MS 30000
+#define LTE_JOIN_MS 240000 /* Modem boot, registration and PDP can take minutes on a cold SIM. */
+#define POWER_SETTLE_MS 250 /* Target supply switched on by a job: rails and the target's reset settle first. */
+
+_Static_assert(PROG_AUTO_TARGETS == PROG_TARGETS, "auto*.cfg holds one project per prog_target_t");
+_Static_assert(PROG_AUTO_ID_SIZE == PROG_ID_SIZE, "Auto bindings store catalog IDs");
 
 typedef enum
 {
   HOME, /* Auto dashboard; the production entry point. */
   MENU,
-  FILES,
+  MANUAL,
+  STORAGE,
+  POWER, /* Target supply outputs. */
   INFO,
+  CHIPS,   /* One row per chip; app.pick decides where SEL leads. */
+  PACKAGES, /* SD packages of app.target. */
+  DETAILS,  /* One installed package. */
+  NETWORK,
+  CONNECT,     /* Wi-Fi, LTE or off. */
+  WIFI_LIST,   /* Scan result, strongest first. */
+  KEYBOARD,    /* Wi-Fi password. */
+  APN_LIST,
+  NET_STATUS,
+  HUB_LIST,    /* Hub projects of app.target. */
+  HUB_CONFIRM,
   CONFIRM,
-  AUTO_SETUP,
-  AUTO_FILES,
-  ERASE_TARGET,
   ERASE_CONFIRM,
+  WIPE_CONFIRM,
   RUNNING,
   RESULT
 } screen_t;
+
+/* What a chip list was opened for. Every package list is grouped by the chip its fw.txt names. */
+typedef enum
+{
+  PICK_AUTO,     /* Bind one package per chip for Auto. */
+  PICK_FLASH,    /* Manual write. */
+  PICK_ERASE,    /* Manual full-chip erase; no package. */
+  PICK_INSTALLED, /* Storage view, including packages that cannot be written. */
+  PICK_HUB        /* Hub projects to install, grouped by the chip the Hub names. */
+} pick_t;
+
+typedef enum
+{
+  JOB_FLASH,
+  JOB_ERASE,
+  JOB_WIPE,
+  JOB_SCAN, /* Network jobs from here on. */
+  JOB_JOIN,
+  JOB_NET_OFF,
+  JOB_HUB_LIST,
+  JOB_INSTALL
+} job_t;
 
 typedef struct
 {
@@ -42,69 +90,101 @@ typedef struct
   FRESULT error;
 } sd_file_t;
 
+/* One list row: the label scrolls when it is selected and too long. */
+typedef struct
+{
+  const char     *text;
+  char            right[12];
+  const uint16_t *icon; /* Menu rows. */
+  int8_t          bars; /* Wi-Fi signal 0..4, or -1. */
+} row_t;
+
 static struct
 {
-  screen_t             screen;
-  char                 ids[PROJECTS][ID_SIZE];
-  unsigned             count;
-  unsigned             selected;
-  unsigned             menu_selected;
-  unsigned             auto_selected;
-  unsigned             auto_target;
-  bool                 auto_job;
-  int                  auto_slot;
-  prog_auto_config_t   auto_config;
-  char                 auto_names[PROJECTS][48];
-  bool                 erase_job;
-  unsigned             erase_target;
-  bool                 mounted;
-  bool                 detected;
-  bool                 dirty;
-  bool                 confirm_armed;
-  bool                 more;
-  bool                 cancel;
-  bool                 image_open;
-  uint32_t             last_buttons;
-  uint32_t             hold_start;
-  uint32_t             draw_time;
-  uint32_t             anim_key; /* Screen state the running animation belongs to. */
-  uint32_t             anim_start;
-  int                  sel_row; /* Selection bar target for this frame, or -1. */
-  int                  sel_from;
-  int                  sel_to;
-  uint32_t             sel_start;
-  screen_t             sel_screen;
-  float                bar_px; /* Eased progress fill, px. */
-  uint32_t             bar_time;
-  uint32_t             job_start;
-  uint32_t             done;
-  uint32_t             total;
-  const char          *stage;
-  char                 error[96];
-  bool                 esp_project;
-  unsigned             esp_file_index;
-  esp_project_t        esp;
-  esp_program_result_t esp_result;
-  prog_manifest_t      manifest;
-  prog_loader_t        loader;
-  prog_image_t         image;
-  swd_program_result_t result;
-  sd_file_t            image_file;
-  uint32_t             image_size;
-  uint32_t             code[1024];
+  screen_t              screen;
+  pick_t                pick;
+  job_t                 job;
+  bool                  auto_job;
+  unsigned              menu_selected;
+  unsigned              manual_selected;
+  unsigned              storage_selected;
+  unsigned              network_selected;
+  unsigned              power_selected;
+  prog_power_config_t   power;
+  bool                  power_on;    /* An enabled output is currently switched on. */
+  bool                  power_saved; /* The settings on screen are the ones on the card. */
+  unsigned              connect_selected;
+  unsigned              apn_selected;
+  unsigned              ap_selected;  /* WIFI_LIST row; the last row rescans. */
+  unsigned              hub_selected; /* HUB_LIST row. */
+  net_ap_t              aps[NET_AP_MAX];
+  unsigned              ap_count;
+  net_info_t            net_info;
+  uint32_t              net_poll;
+  uint8_t               join_mode; /* net_mode_t of JOB_JOIN. */
+  char                  join_ssid[NET_SSID_SIZE];
+  char                  join_secret[NET_PASSWORD_SIZE]; /* Wi-Fi password or LTE APN. */
+  kbd_t                 kbd;
+  uint32_t              repeat_at; /* Next UP/DN auto-repeat on the keyboard. */
+  uint32_t              sel_down;
+  bool                  sel_used; /* The current SEL press already acted (menu, or it opened the keyboard). */
+  hub_list_t            hub;
+  uint8_t               hub_view[HUB_PROJECTS];
+  unsigned              hub_view_count;
+  unsigned              target;   /* prog_target_t: chip row, erase chip, and the chip Auto detected. */
+  unsigned              selected; /* Package row; in PICK_AUTO row 0 clears the binding. */
+  prog_catalog_t        catalog;
+  FRESULT               catalog_error;
+  uint8_t               view[PROG_CATALOG_SIZE]; /* Catalog indices of app.target for app.pick. */
+  unsigned              view_count;
+  char                  job_id[PROG_ID_SIZE];
+  int                   auto_slot;
+  prog_auto_config_t    auto_config;
+  bool                  loader_present;
+  bool                  mounted;
+  bool                  detected;
+  bool                  dirty;
+  bool                  marquee; /* The last frame scrolled a label. */
+  bool                  confirm_armed;
+  bool                  cancel;
+  bool                  image_open;
+  uint32_t              last_buttons;
+  uint32_t              hold_start;
+  uint32_t              draw_time;
+  uint32_t              anim_key; /* Screen state the running animation belongs to. */
+  uint32_t              anim_start;
+  int                   sel_row; /* Selection bar target for this frame, or -1. */
+  int                   sel_from;
+  int                   sel_to;
+  uint32_t              sel_start;
+  screen_t              sel_screen;
+  float                 bar_px; /* Eased progress fill, px. */
+  float                 bar_v;  /* Jelly bar spring velocity, px/s. */
+  uint32_t              bar_time;
+  char                  stage_name[24]; /* Install: file shown, slides in when it changes. */
+  uint32_t              stage_at;
+  unsigned              pct_seen; /* Install: percent shown, pops when it changes. */
+  uint32_t              pct_at;
+  uint32_t              job_start;
+  uint32_t              done;
+  uint32_t              total;
+  const char           *stage;
+  char                  error[96];
+  unsigned              esp_file_index;
+  esp_program_result_t  esp_result;
+  prog_package_t        package;
+  prog_storage_result_t wipe;
+  prog_loader_t         loader;
+  prog_image_t          image;
+  swd_program_result_t  result;
+  sd_file_t             image_file;
+  uint32_t              image_size;
+  uint32_t              code[1024];
 } app;
 
 static void progDraw(void);
-
-static const char *progTargetName(unsigned target)
-{
-  return target == 0 ? "H723" : espProjectChipName((esp_project_chip_t)(target - 1));
-}
-
-static unsigned progCurrentTarget(void)
-{
-  return app.esp_project ? 1U + (unsigned)app.esp.chip : 0;
-}
+static void progOpen(screen_t screen);
+static void progOpenChips(pick_t pick);
 
 static bool progAutoReadSlot(unsigned slot, prog_auto_config_t *config)
 {
@@ -151,8 +231,8 @@ static bool progAutoSave(const char *id)
   }
   prog_auto_config_t next = app.auto_config;
   next.sequence++;
-  memset(next.project[app.auto_target], 0, PROG_AUTO_ID_SIZE);
-  snprintf(next.project[app.auto_target], PROG_AUTO_ID_SIZE, "%s", id);
+  memset(next.project[app.target], 0, PROG_AUTO_ID_SIZE);
+  snprintf(next.project[app.target], PROG_AUTO_ID_SIZE, "%s", id);
   uint8_t record[PROG_AUTO_RECORD_SIZE];
   progAutoEncode(&next, record);
   unsigned slot = app.auto_slot == 0 ? 1 : 0;
@@ -190,31 +270,138 @@ static bool progAutoAssigned(void)
   return false;
 }
 
+static bool progAutoBound(const prog_catalog_entry_t *entry)
+{
+  return entry->target < PROG_TARGETS && !strcmp(app.auto_config.project[entry->target], entry->id);
+}
+
+/* Drives 3V_OUT/5V_OUT: the enabled outputs while on, both off otherwise. */
+static void progPowerOutput(bool on)
+{
+  gpioPinWrite(TARGET_3V3, on && app.power.out_3v3);
+  gpioPinWrite(TARGET_5V, on && app.power.out_5v);
+  app.power_on = on && (app.power.out_3v3 || app.power.out_5v);
+}
+
+/* Between jobs: Always keeps the enabled outputs on, Job leaves the target unpowered. */
+static void progPowerIdle(void)
+{
+  progPowerOutput(app.power.mode == PROG_POWER_ALWAYS);
+}
+
+/* Before the first target access of a job, so SWD or the ESP ROM is probed on a target that has started. */
+static void progPowerJob(void)
+{
+  if (app.power_on || (!app.power.out_3v3 && !app.power.out_5v))
+  {
+    return;
+  }
+  const char *stage = app.stage;
+  app.stage         = "POWER ON";
+  app.dirty         = true;
+  progDraw();
+  progPowerOutput(true);
+  cliPrintf("POWER    : 3V3=%s 5V=%s for this job\n", app.power.out_3v3 ? "ON" : "OFF", app.power.out_5v ? "ON" : "OFF");
+  delay(POWER_SETTLE_MS);
+  app.stage = stage;
+}
+
+/* A new card brings its own settings; a pulled card leaves the outputs as they are. */
+static void progPowerReload(void)
+{
+  if (!progPowerLoad(&app.power))
+  {
+    memset(&app.power, 0, sizeof(app.power));
+  }
+  app.power_saved = true;
+  progPowerIdle();
+}
+
+static void progPowerChange(void)
+{
+  app.power_saved = app.mounted && sdIsDetected() && progPowerSave(&app.power);
+  progPowerIdle();
+  app.dirty = true;
+}
+
 static bool progIsEspErase(void)
 {
-  return app.erase_job && app.erase_target != 0;
+  const prog_target_info_t *info = progTargetInfo((prog_target_t)app.target);
+  return app.job == JOB_ERASE && info && info->esp;
 }
 
-static const char *progEraseTargetName(void)
+/* Chip rows; the Storage view adds "Unknown" when a package names no supported device. */
+static unsigned progChipRows(void)
 {
-  return app.erase_target == 0 ? "H723" : espProjectChipName((esp_project_chip_t)(app.erase_target - 1));
-}
-
-static bool progIsValidId(const char *s)
-{
-  size_t n = strlen(s);
-  if (!n || n >= ID_SIZE)
+  if (app.pick == PICK_HUB)
   {
-    return false;
+    return PROG_TARGETS; /* Hub projects for chips this firmware cannot write are not offered. */
   }
-  for (; *s; s++)
+  bool unknown = app.pick == PICK_INSTALLED && progCatalogFilter(&app.catalog, PROG_TARGET_NONE, false, NULL, 0);
+  return PROG_TARGETS + (unknown ? 1 : 0);
+}
+
+static bool progUsableOnly(void)
+{
+  return app.pick != PICK_INSTALLED;
+}
+
+static unsigned progPackageRows(void)
+{
+  return app.view_count + (app.pick == PICK_AUTO ? 1 : 0);
+}
+
+/* NULL for the "(None)" row of the Auto list. */
+static const prog_catalog_entry_t *progPackageAt(unsigned row)
+{
+  if (app.pick == PICK_AUTO)
   {
-    if (!((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || (*s >= '0' && *s <= '9') || *s == '_' || *s == '-'))
+    if (!row)
     {
-      return false;
+      return NULL;
     }
+    row--;
   }
-  return true;
+  return row < app.view_count ? &app.catalog.entries[app.view[row]] : NULL;
+}
+
+static void progViewBuild(void)
+{
+  app.view_count =
+  progCatalogFilter(&app.catalog, (prog_target_t)app.target, progUsableOnly(), app.view, PROG_CATALOG_SIZE);
+  unsigned rows = progPackageRows();
+  if (app.selected >= rows)
+  {
+    app.selected = rows ? rows - 1 : 0;
+  }
+  if (app.screen == DETAILS && !progPackageAt(app.selected))
+  {
+    app.screen = PACKAGES;
+  }
+}
+
+/* Re-reads every fw.txt; called when the card changes and after jobs that touch it. */
+static void progRefresh(void)
+{
+  memset(&app.catalog, 0, sizeof(app.catalog));
+  app.catalog_error  = FR_OK;
+  app.loader_present = false;
+  app.dirty          = true;
+  if (app.mounted)
+  {
+    FRESULT e = progCatalogScan(&app.catalog);
+    if (e != FR_OK && e != FR_NO_FILE && e != FR_NO_PATH) /* A card without /prog/fw is simply empty. */
+    {
+      app.catalog_error = e;
+    }
+    FILINFO info;
+    app.loader_present = f_stat(LOADER_PATH, &info) == FR_OK;
+  }
+  if (app.target >= progChipRows())
+  {
+    app.target = 0;
+  }
+  progViewBuild();
 }
 
 static bool progFail(const char *message)
@@ -278,161 +465,20 @@ static bool progCloseImage(void)
 
 static bool progLoadManifest(const char *id)
 {
-  sd_file_t   s;
-  prog_file_t f;
-  char        path[96];
-  char        text[1025];
-  if (!progIsValidId(id))
+  FRESULT     io;
+  const char *error = progPackageLoad(id, &app.package, &io);
+  if (io != FR_OK)
   {
-    return progFail("Invalid project ID");
+    char path[64];
+    snprintf(path, sizeof(path), "/prog/fw/%s/fw.txt", id);
+    return progIoFail(path, io);
   }
-  snprintf(path, sizeof(path), "/prog/fw/%s/fw.txt", id);
-  if (!progOpenFile(&s, path, &f))
-  {
-    return false;
-  }
-  const char *error = NULL;
-  if (!f.size || f.size > 1024)
-  {
-    error = "fw.txt size";
-  }
-  else if (!progReadFile(&s, 0, text, f.size))
-  {
-    error = "fw.txt read";
-  }
-  else if (memchr(text, 0, f.size))
-  {
-    error = "fw.txt NUL";
-  }
-  else
-  {
-    text[f.size]    = 0;
-    app.esp_project = espProjectIsManifest(text);
-    if (app.esp_project)
-    {
-      error = espProjectParse(text, &app.esp);
-      if (!error)
-      {
-        memset(&app.manifest, 0, sizeof(app.manifest));
-        strcpy(app.manifest.name, app.esp.name);
-        app.image_size = app.esp.total;
-      }
-    }
-    else
-    {
-      error = progParseManifest(text, &app.manifest);
-    }
-  }
-  bool closed = progCloseFile(&s);
   if (error)
   {
     return progFail(error);
   }
-  return closed;
-}
-
-static void progScanProjects(void)
-{
-  app.count = app.selected = 0;
-  app.more                 = false;
-  app.error[0]             = 0;
-  app.dirty                = true;
-  if (!app.mounted)
-  {
-    return;
-  }
-  DIR     dir;
-  FILINFO info;
-  FRESULT e = f_opendir(&dir, "/prog/fw");
-  if (e != FR_OK)
-  {
-    progIoFail("/prog/fw", e);
-    return;
-  }
-  while ((e = f_readdir(&dir, &info)) == FR_OK && info.fname[0])
-  {
-    if (!(info.fattrib & AM_DIR) || !progIsValidId(info.fname))
-    {
-      continue;
-    }
-    char    path[96];
-    FILINFO file;
-    snprintf(path, sizeof(path), "/prog/fw/%.24s/fw.txt", info.fname);
-    if (f_stat(path, &file) != FR_OK || (file.fattrib & AM_DIR))
-    {
-      continue;
-    }
-    if (app.count == PROJECTS)
-    {
-      app.more = true;
-      continue;
-    }
-    strcpy(app.ids[app.count++], info.fname);
-  }
-  FRESULT ce = f_closedir(&dir);
-  if (e != FR_OK || ce != FR_OK)
-  {
-    app.count = 0;
-    progIoFail("scan", e != FR_OK ? e : ce);
-  }
-  for (unsigned i = 0; i < app.count; i++)
-  {
-    for (unsigned j = i + 1; j < app.count; j++)
-    {
-      if (strcmp(app.ids[i], app.ids[j]) > 0)
-      {
-        char tmp[ID_SIZE];
-        strcpy(tmp, app.ids[i]);
-        strcpy(app.ids[i], app.ids[j]);
-        strcpy(app.ids[j], tmp);
-      }
-    }
-  }
-}
-
-static void progAutoProjects(void)
-{
-  progScanProjects();
-  unsigned eligible = 0;
-  for (unsigned i = 0; i < app.count; i++)
-  {
-    if (progLoadManifest(app.ids[i]) && progCurrentTarget() == app.auto_target)
-    {
-      if (eligible != i)
-      {
-        strcpy(app.ids[eligible], app.ids[i]);
-      }
-      strcpy(app.auto_names[eligible], app.manifest.name);
-      eligible++;
-    }
-  }
-  app.count = eligible;
-  for (unsigned i = 0; i < app.count; i++)
-  {
-    for (unsigned j = i + 1; j < app.count; j++)
-    {
-      int order = strcmp(app.auto_names[i], app.auto_names[j]);
-      if (order > 0 || (order == 0 && strcmp(app.ids[i], app.ids[j]) > 0))
-      {
-        char name[48], id[ID_SIZE];
-        strcpy(name, app.auto_names[i]);
-        strcpy(app.auto_names[i], app.auto_names[j]);
-        strcpy(app.auto_names[j], name);
-        strcpy(id, app.ids[i]);
-        strcpy(app.ids[i], app.ids[j]);
-        strcpy(app.ids[j], id);
-      }
-    }
-  }
-  app.selected = 0; /* First item clears the binding. */
-  for (unsigned i = 0; i < app.count; i++)
-  {
-    if (!strcmp(app.ids[i], app.auto_config.project[app.auto_target]))
-    {
-      app.selected = i + 1;
-    }
-  }
-  app.error[0] = 0;
+  app.image_size = app.package.esp_project ? app.package.esp.total : 0;
+  return true;
 }
 
 static bool progProgress(void *context, const char *step, uint32_t done, uint32_t total)
@@ -441,7 +487,8 @@ static bool progProgress(void *context, const char *step, uint32_t done, uint32_
   app.stage = step;
   app.done  = done;
   app.total = total;
-  if (buttonGetPressed(BTN_M) || (!progIsEspErase() && !sdIsDetected()))
+  bool sd = app.job == JOB_FLASH || app.job == JOB_WIPE || app.job == JOB_INSTALL || (app.job == JOB_ERASE && !progIsEspErase());
+  if (buttonGetPressed(BTN_M) || (sd && !sdIsDetected()))
   {
     app.cancel = true;
   }
@@ -514,11 +561,11 @@ static bool progLoadLoader(const char *path, uint32_t expected_crc)
 
 static bool progEspPreflight(const char *id)
 {
-  cliPrintf("TARGET   : %s, %u images, baud ceiling=%lu%s (five-pin UART)\n", espProjectChipName(app.esp.chip),
-            app.esp.count, (unsigned long)(app.esp.baud ? app.esp.baud : 921600), app.esp.baud ? "" : " auto");
-  for (unsigned i = 0; i < app.esp.count; i++)
+  cliPrintf("TARGET   : %s, %u images, baud ceiling=%lu%s (five-pin UART)\n", espProjectChipName(app.package.esp.chip),
+            app.package.esp.count, (unsigned long)(app.package.esp.baud ? app.package.esp.baud : 921600), app.package.esp.baud ? "" : " auto");
+  for (unsigned i = 0; i < app.package.esp.count; i++)
   {
-    const esp_project_image_t *img = &app.esp.images[i];
+    const esp_project_image_t *img = &app.package.esp.images[i];
     char                       path[128];
     snprintf(path, sizeof(path), "/prog/fw/%s/%s", id, img->file);
     sd_file_t   sd;
@@ -548,7 +595,7 @@ static bool progEspPreflight(const char *id)
       {
         error = "ESP header read";
       }
-      else if (header[0] == 0xE9 && (header[12] | ((uint16_t)header[13] << 8)) != espProjectChipId(app.esp.chip))
+      else if (header[0] == 0xE9 && (header[12] | ((uint16_t)header[13] << 8)) != espProjectChipId(app.package.esp.chip))
       {
         error = "ESP BIN chip mismatch";
       }
@@ -565,7 +612,7 @@ static bool progEspPreflight(const char *id)
     cliPrintf("IMAGE    : %s @%08lX, %lu B, CRC32=%08lX OK\n", img->file, (unsigned long)img->address,
               (unsigned long)img->size, (unsigned long)crc);
   }
-  app.image_size     = app.esp.total;
+  app.image_size     = app.package.esp.total;
   app.esp_file_index = UINT32_MAX;
   return true;
 }
@@ -573,7 +620,7 @@ static bool progEspPreflight(const char *id)
 static bool progReadEspImage(void *context, unsigned image, uint32_t offset, void *data, uint32_t size)
 {
   (void)context;
-  if (image >= app.esp.count || offset > app.esp.images[image].size || size > app.esp.images[image].size - offset ||
+  if (image >= app.package.esp.count || offset > app.package.esp.images[image].size || size > app.package.esp.images[image].size - offset ||
       !sdIsDetected())
   {
     return progFail("ESP SD range/removal");
@@ -586,14 +633,14 @@ static bool progReadEspImage(void *context, unsigned image, uint32_t offset, voi
     }
     char        path[128];
     prog_file_t file;
-    snprintf(path, sizeof(path), "/prog/fw/%s/%s", app.ids[app.selected], app.esp.images[image].file);
+    snprintf(path, sizeof(path), "/prog/fw/%s/%s", app.job_id, app.package.esp.images[image].file);
     if (!progOpenFile(&app.image_file, path, &file))
     {
       return false;
     }
     app.image_open     = true;
     app.esp_file_index = image;
-    if (file.size != app.esp.images[image].size)
+    if (file.size != app.package.esp.images[image].size)
     {
       progCloseImage();
       return progFail("ESP SD size changed");
@@ -603,7 +650,7 @@ static bool progReadEspImage(void *context, unsigned image, uint32_t offset, voi
   {
     return progIoFail("ESP image read", app.image_file.error);
   }
-  return offset + size == app.esp.images[image].size ? progCloseImage() : true;
+  return offset + size == app.package.esp.images[image].size ? progCloseImage() : true;
 }
 
 static void progEspReport(const esp_program_result_t *r)
@@ -637,12 +684,12 @@ static bool progPreflight(const char *id)
   {
     return false;
   }
-  cliPrintf("PROJECT  : %s\n", app.manifest.name);
-  if (app.esp_project)
+  cliPrintf("PROJECT  : %s\n", app.package.manifest.name);
+  if (app.package.esp_project)
   {
     return progEspPreflight(id);
   }
-  if (!progLoadLoader(app.manifest.algo, app.manifest.loader_crc32))
+  if (!progLoadLoader(app.package.manifest.algo, app.package.manifest.loader_crc32))
   {
     return false;
   }
@@ -650,19 +697,19 @@ static bool progPreflight(const char *id)
   uint32_t    crc   = 0;
   const char *error = NULL;
   char        path[128];
-  snprintf(path, sizeof(path), "/prog/fw/%s/%s", id, app.manifest.image);
+  snprintf(path, sizeof(path), "/prog/fw/%s/%s", id, app.package.manifest.image);
   if (!progOpenFile(&app.image_file, path, &f))
   {
     return false;
   }
   app.image_open = true;
   app.image_size = f.size;
-  error          = progInspectImage(&f, app.manifest.address, &app.image);
+  error          = progInspectImage(&f, app.package.manifest.address, &app.image);
   if (!error && !progFileCrc32(&f, &crc))
   {
     error = "Image read failed";
   }
-  if (!error && crc != app.manifest.crc32)
+  if (!error && crc != app.package.manifest.crc32)
   {
     error = "Image CRC mismatch";
   }
@@ -672,13 +719,14 @@ static bool progPreflight(const char *id)
     return progFail(error);
   }
   cliPrintf("IMAGE    : %s, %lu bytes, CRC32=%08lX OK\n", path, (unsigned long)f.size, (unsigned long)crc);
-  cliPrintf("ADDRESS  : %08lX SP=%08lX Reset=%08lX\n", (unsigned long)app.manifest.address, (unsigned long)app.image.sp,
+  cliPrintf("ADDRESS  : %08lX SP=%08lX Reset=%08lX\n", (unsigned long)app.package.manifest.address, (unsigned long)app.image.sp,
             (unsigned long)app.image.reset);
   return true;
 }
 
 static void progFinish(bool ok)
 {
+  progPowerIdle();
   ledActivityStop();
   if (ok)
   {
@@ -691,26 +739,271 @@ static void progFinish(bool ok)
   progDraw();
 }
 
+static bool progWipe(void)
+{
+  if (!app.mounted || !sdIsDetected() || !fatfsIsMount())
+  {
+    return progFail("SD not mounted");
+  }
+  const prog_storage_input_t input = {NULL, progProgress};
+  const char                *error = progStorageWipe(&input, &app.wipe);
+  cliPrintf("SD DELETE: %s, %lu entries removed\n", error ? error : "OK", (unsigned long)app.wipe.removed);
+  if (app.wipe.io != FR_OK)
+  {
+    return progIoFail("SD delete", app.wipe.io);
+  }
+  return error ? progFail(error) : true;
+}
+
+/* Wi-Fi scan: the ESP scans in the background; the list is ready when it stops answering BUSY. */
+static bool progNetScan(void)
+{
+  uint8_t status = netWifiScan();
+  if (status != NET_ST_OK)
+  {
+    return progFail(netStatusText(status));
+  }
+  uint32_t start = millis(), poll = 0;
+  while (progProgress(NULL, "WIFI SCAN", 0, 1))
+  {
+    if ((uint32_t)(millis() - poll) < 300)
+    {
+      continue;
+    }
+    poll   = millis();
+    status = netWifiList(app.aps, NET_AP_MAX, &app.ap_count);
+    if (status == NET_ST_OK)
+    {
+      return true;
+    }
+    if (status != NET_ST_BUSY)
+    {
+      return progFail(netStatusText(status));
+    }
+    if ((uint32_t)(millis() - start) >= SCAN_MS)
+    {
+      return progFail("Scan timeout");
+    }
+  }
+  return progFail("Stopped");
+}
+
+/* Join and wait until the ESP reports this network connected; settings are saved only after that. */
+static bool progNetJoin(void)
+{
+  bool        wifi   = app.join_mode == NET_MODE_WIFI;
+  const char *stage  = wifi ? "WIFI JOIN" : "LTE ATTACH";
+  uint8_t     status = wifi ? netWifiJoin(app.join_ssid, app.join_secret) : netLteJoin(app.join_secret);
+  cliPrintf("JOIN     : %s %s -> %s\n", wifi ? "Wi-Fi" : "LTE", wifi ? app.join_ssid : app.join_secret,
+            netStatusText(status));
+  if (status != NET_ST_OK)
+  {
+    return progFail(netStatusText(status));
+  }
+  uint32_t start = millis(), poll = 0, limit = wifi ? WIFI_JOIN_MS : LTE_JOIN_MS;
+  while (progProgress(NULL, stage, 0, 1))
+  {
+    if ((uint32_t)(millis() - poll) < 500)
+    {
+      continue;
+    }
+    poll   = millis();
+    status = netInfo(&app.net_info);
+    if (status != NET_ST_OK)
+    {
+      return progFail(netStatusText(status));
+    }
+    const net_info_t *info = &app.net_info;
+    bool              mine = info->mode == app.join_mode && (!wifi || !strcmp(info->detail, app.join_ssid));
+    if (info->state == NET_STATE_CONNECTED && mine)
+    {
+      net_store_t *settings = netSettings();
+      settings->mode        = app.join_mode;
+      if (wifi)
+      {
+        netStoreRemember(settings, app.join_ssid, app.join_secret);
+        snprintf(settings->ssid, sizeof(settings->ssid), "%s", app.join_ssid);
+      }
+      else
+      {
+        snprintf(settings->apn, sizeof(settings->apn), "%.63s", app.join_secret);
+      }
+      if (!netSettingsSave())
+      {
+        cliPrintf("JOIN     : connected; settings not saved (SD)\n");
+      }
+      return true;
+    }
+    /* A failure left over from the previous attempt can show for a moment after the request. */
+    if (info->state == NET_STATE_FAILED && (uint32_t)(millis() - start) > 1000)
+    {
+      return progFail(info->detail[0] ? info->detail : "Join failed");
+    }
+    if ((uint32_t)(millis() - start) >= limit)
+    {
+      netOff();
+      return progFail("Join timeout");
+    }
+  }
+  netOff();
+  return progFail("Stopped");
+}
+
+static const hub_project_t *progHubAt(unsigned row)
+{
+  return row < app.hub_view_count ? &app.hub.projects[app.hub_view[row]] : NULL;
+}
+
+/* The SD package with the same ID, if any. */
+static const prog_catalog_entry_t *progHubInstalled(const hub_project_t *project)
+{
+  for (unsigned i = 0; project && i < app.catalog.count; i++)
+  {
+    if (!strcmp(app.catalog.entries[i].id, project->id))
+    {
+      return &app.catalog.entries[i];
+    }
+  }
+  return NULL;
+}
+
+static unsigned progHubCount(prog_target_t target, uint8_t *view)
+{
+  unsigned count = 0;
+  for (unsigned i = 0; i < app.hub.count; i++)
+  {
+    if (app.hub.projects[i].target == target)
+    {
+      if (view)
+      {
+        view[count] = (uint8_t)i;
+      }
+      count++;
+    }
+  }
+  return count;
+}
+
+/* Why Install cannot start, or NULL. The ST loader is not on the Hub, so a missing one is reported here. */
+static const char *progHubBlocked(const hub_project_t *project)
+{
+  const prog_target_info_t *info = progTargetInfo(project->target);
+  if (!app.mounted)
+  {
+    return "No SD card";
+  }
+  if (!netIsConnected())
+  {
+    return "Not connected";
+  }
+  if (info && !info->esp && !app.loader_present)
+  {
+    return "No ST loader!";
+  }
+  if (!progHubInstalled(project) && app.catalog.count >= PROG_CATALOG_SIZE)
+  {
+    return "SD full (16)";
+  }
+  return NULL;
+}
+
+static void progRunNetJob(void)
+{
+  bool        ok    = false;
+  const char *error = NULL;
+  switch (app.job)
+  {
+    case JOB_SCAN:
+      if (progNetScan())
+      {
+        ledActivityStop();
+        app.last_buttons = buttonGetData(); /* A key held through the job does not act on the next screen. */
+        app.ap_selected  = 0;
+        progOpen(WIFI_LIST);
+        return;
+      }
+      break;
+    case JOB_JOIN:
+      ok = progNetJoin();
+      break;
+    case JOB_HUB_LIST:
+      app.net_info = *netInfoCached();
+      if (!netIsConnected())
+      {
+        progFail(netIsPresent() ? "Not connected" : "No ESP link");
+        break;
+      }
+      error = hubFetchList(&app.hub, progProgress, NULL);
+      cliPrintf("HUB      : %s, %u projects%s\n", error ? error : "OK", app.hub.count, app.hub.more ? "+" : "");
+      if (!error)
+      {
+        ledActivityStop();
+        app.last_buttons = buttonGetData();
+        progOpenChips(PICK_HUB);
+        return;
+      }
+      progFail(error);
+      break;
+    case JOB_INSTALL:
+    {
+      const hub_project_t *project = progHubAt(app.hub_selected);
+      error                        = project ? progHubBlocked(project) : "No project";
+      if (!error)
+      {
+        error = hubInstall(project, progProgress, NULL);
+        cliPrintf("INSTALL  : %s %s -> %s\n", project->id, project->version, error ? error : "OK");
+      }
+      ok = !error;
+      if (error)
+      {
+        progFail(error);
+      }
+      progRefresh();
+      break;
+    }
+    default:
+      break;
+  }
+  progFinish(ok);
+}
+
 static void progRunJob(void)
 {
   app.screen    = RUNNING;
-  app.stage     = progIsEspErase() ? "ESP PREFLIGHT" : "CHECK SD FILES";
+  app.stage     = progIsEspErase() ? "ESP PREFLIGHT" : app.job == JOB_WIPE ? "SCAN SD" : "CHECK SD FILES";
   app.cancel    = false;
   app.done      = 0;
   app.total     = 1;
   app.job_start = millis();
   memset(&app.result, 0, sizeof(app.result));
-  app.dirty = true;
+  app.stage_name[0] = 0;
+  app.pct_seen      = 0;
+  app.bar_v         = 0;
+  app.dirty         = true;
   progDraw();
   app.error[0] = 0;
-  if (app.erase_job)
+  if (app.job >= JOB_SCAN)
   {
-    cliPrintf("ERASE    : %s, entire flash including application and stored data\n", progEraseTargetName());
+    progRunNetJob();
+    return;
   }
-  bool ok = progIsEspErase() ? true
-            : app.erase_job  ? progLoadLoader(LOADER_PATH, LOADER_CRC)
-                             : progPreflight(app.ids[app.selected]);
-  if (ok && app.auto_job && progCurrentTarget() != app.auto_target)
+  if (app.job == JOB_WIPE)
+  {
+    bool ok = progWipe();
+    progAutoLoad(); /* The Auto bindings were on the card too. */
+    progRefresh();
+    progFinish(ok);
+    return;
+  }
+  if (app.job == JOB_ERASE)
+  {
+    cliPrintf("ERASE    : %s, entire flash including application and stored data\n",
+              progTargetLabel((prog_target_t)app.target));
+  }
+  bool ok = progIsEspErase()       ? true
+            : app.job == JOB_ERASE ? progLoadLoader(LOADER_PATH, LOADER_CRC)
+                                   : progPreflight(app.job_id);
+  if (ok && app.auto_job && app.package.target != app.target)
   {
     ok = progFail("Auto chip mismatch");
   }
@@ -718,11 +1011,15 @@ static void progRunJob(void)
   {
     ok = progFail("Stopped before reset");
   }
-  if (ok && (progIsEspErase() || (!app.erase_job && app.esp_project)))
+  if (ok)
+  {
+    progPowerJob();
+  }
+  if (ok && (progIsEspErase() || (app.job == JOB_FLASH && app.package.esp_project)))
   {
     const esp_program_input_t input = {NULL, progIsEspErase() ? NULL : progReadEspImage, progProgress};
-    ok = progIsEspErase() ? espProgramErase((esp_project_chip_t)(app.erase_target - 1), &input, &app.esp_result)
-                          : espProgramRun(&app.esp, &input, &app.esp_result);
+    ok = progIsEspErase() ? espProgramErase(progTargetInfo((prog_target_t)app.target)->esp_chip, &input, &app.esp_result)
+                          : espProgramRun(&app.package.esp, &input, &app.esp_result);
     app.result.stage          = app.esp_result.stage;
     app.result.address        = app.esp_result.address;
     app.result.written        = app.esp_result.written;
@@ -740,18 +1037,18 @@ static void progRunJob(void)
   {
     swd_program_input_t input = {app.code,
                                  app.loader.code_filesz,
-                                 app.erase_job ? 0 : app.image_size,
-                                 app.erase_job ? 0 : app.manifest.crc32,
+                                 app.job == JOB_ERASE ? 0 : app.image_size,
+                                 app.job == JOB_ERASE ? 0 : app.package.manifest.crc32,
                                  NULL,
-                                 app.erase_job ? NULL : progReadImage,
+                                 app.job == JOB_ERASE ? NULL : progReadImage,
                                  progProgress};
-    swd_err_t           e     = app.erase_job ? swdEraseH723(&input, &app.result) : swdProgramH723(&input, &app.result);
+    swd_err_t           e     = app.job == JOB_ERASE ? swdEraseH723(&input, &app.result) : swdProgramH723(&input, &app.result);
     ok                        = (e == SWD_OK);
     if (!ok && !app.error[0])
     {
       progFail(app.result.cancelled ? "Stopped" : swdErrStr(e));
     }
-    cliPrintf("%s : %s at %s, address=%08lX, SR=%08lX\n", app.erase_job ? "ERASE   " : "PROGRAM ", swdErrStr(e),
+    cliPrintf("%s : %s at %s, address=%08lX, SR=%08lX\n", app.job == JOB_ERASE ? "ERASE   " : "PROGRAM ", swdErrStr(e),
               app.result.stage, (unsigned long)app.result.address, (unsigned long)app.result.flash_sr);
     if (!ok)
     {
@@ -789,7 +1086,7 @@ static void progRunJob(void)
 static void progRunAuto(void)
 {
   app.auto_job  = true;
-  app.erase_job = false;
+  app.job       = JOB_FLASH;
   app.cancel    = false;
   app.error[0]  = 0;
   memset(&app.result, 0, sizeof(app.result));
@@ -806,11 +1103,12 @@ static void progRunAuto(void)
   }
   else if (progProgress(NULL, "DETECT SWD", 0, 1))
   {
+    progPowerJob(); /* Stays on through the job that follows detection. */
     swd_probe_t probe;
     swd_err_t   status = swdProbeH723(100, &probe);
     if (status == SWD_OK)
     {
-      app.auto_target = 0;
+      app.target = PROG_TARGET_H723;
     }
     else if (status == SWD_ERR_NORESP && (probe.dpidr == 0 || probe.dpidr == UINT32_MAX))
     {
@@ -829,7 +1127,9 @@ static void progRunAuto(void)
         }
         else if (chip == ESP32_CHIP || chip == ESP32S3_CHIP || chip == ESP32C3_CHIP)
         {
-          app.auto_target = chip == ESP32_CHIP ? 1 : chip == ESP32S3_CHIP ? 2 : 3;
+          app.target = chip == ESP32_CHIP     ? PROG_TARGET_ESP32
+                       : chip == ESP32S3_CHIP ? PROG_TARGET_ESP32S3
+                                              : PROG_TARGET_ESP32C3;
         }
         else
         {
@@ -848,9 +1148,8 @@ static void progRunAuto(void)
     }
     if (!app.error[0])
     {
-      char id[ID_SIZE];
-      strcpy(id, app.auto_config.project[app.auto_target]);
-      cliPrintf("AUTO     : %s -> %s\n", progTargetName(app.auto_target), id[0] ? id : "(not assigned)");
+      const char *id = app.auto_config.project[app.target];
+      cliPrintf("AUTO     : %s -> %s\n", progTargetLabel((prog_target_t)app.target), id[0] ? id : "(not assigned)");
       if (!id[0])
       {
         progFail("Set Auto project");
@@ -858,8 +1157,7 @@ static void progRunAuto(void)
       else
       {
         /* Use the saved ID directly; a change in directory sort order cannot select another package. */
-        app.selected = 0;
-        strcpy(app.ids[0], id);
+        strcpy(app.job_id, id);
         progRunJob();
         return;
       }
@@ -881,6 +1179,11 @@ static const uint16_t icon_info[12]  = {0x1F8, 0x204, 0x402, 0x861, 0x801, 0x861
 static const uint16_t icon_card[12]  = {0x1FE, 0x202, 0x422, 0x8AA, 0x8AA, 0x802,
                                         0x802, 0x802, 0x802, 0x802, 0x802, 0xFFE};
 static const uint16_t icon_setup[12] = {0x060, 0xFFF, 0x060, 0, 0x600, 0xFFF, 0x600, 0, 0x00C, 0xFFF, 0x00C, 0};
+static const uint16_t icon_list[12]  = {0, 0xDFF, 0xDFF, 0, 0, 0xDFF, 0xDFF, 0, 0, 0xDFF, 0xDFF, 0};
+static const uint16_t icon_wifi[12]  = {0, 0x3FC, 0xC03, 0, 0x0F0, 0x30C, 0, 0, 0x060, 0x060, 0, 0};
+static const uint16_t icon_power[12] = {0x060, 0x264, 0x462, 0x861, 0x861, 0x801,
+                                        0x801, 0x801, 0x402, 0x204, 0x1F8, 0};
+static const uint16_t icon_get[12]   = {0x060, 0x060, 0x060, 0x060, 0x666, 0x36C, 0x1F8, 0x0F0, 0x060, 0, 0xFFF, 0xFFF};
 
 static void progDrawIcon(int x, int y, const uint16_t *rows, uint16_t color, unsigned scale)
 {
@@ -966,6 +1269,78 @@ static void progDrawSdBadge(void)
     lcdDrawRect(104, 0, 24, 11, white);
   }
   lcdPrintf(109, 0, app.mounted ? black : white, "SD");
+}
+
+/* 7-px proportional glyphs for the power badge; bit (width - 1) is the leftmost column. '!' is the bolt. */
+typedef struct
+{
+  char    c;
+  uint8_t width;
+  uint8_t rows[7];
+} mini_glyph_t;
+
+static const mini_glyph_t mini_glyphs[] = {
+  {'!', 5, {0x03, 0x06, 0x0C, 0x1F, 0x06, 0x0C, 0x18}},
+  {'3', 4, {0x0E, 0x01, 0x01, 0x06, 0x01, 0x01, 0x0E}},
+  {'5', 4, {0x0F, 0x08, 0x0E, 0x01, 0x01, 0x09, 0x06}},
+  {'.', 1, {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01}},
+  {'V', 5, {0x11, 0x11, 0x11, 0x0A, 0x0A, 0x04, 0x04}},
+  {'&', 5, {0x0C, 0x12, 0x14, 0x08, 0x15, 0x12, 0x0D}},
+};
+
+static const mini_glyph_t *progMiniGlyph(char c)
+{
+  for (unsigned i = 0; i < sizeof(mini_glyphs) / sizeof(mini_glyphs[0]); i++)
+  {
+    if (mini_glyphs[i].c == c)
+    {
+      return &mini_glyphs[i];
+    }
+  }
+  return NULL;
+}
+
+/* Glyphs sit 1 px apart; the bolt and '&' get 2 px so the voltages read as separate words. Returns the width. */
+static int progDrawMiniText(int x, int y, const char *text, uint16_t color, bool draw)
+{
+  int start = x;
+  for (const char *p = text; *p; p++)
+  {
+    const mini_glyph_t *g = progMiniGlyph(*p);
+    if (!g)
+    {
+      continue;
+    }
+    for (unsigned r = 0; draw && r < 7; r++)
+    {
+      for (unsigned col = 0; col < g->width; col++)
+      {
+        if (g->rows[r] & (1U << (g->width - 1 - col)))
+        {
+          lcdDrawPixel(x + col, y + r, color);
+        }
+      }
+    }
+    x += g->width;
+    if (p[1])
+    {
+      x += (*p == '!' || *p == '&' || p[1] == '&') ? 2 : 1;
+    }
+  }
+  return x - start;
+}
+
+/* Home shows which supply is live on the target connector right now. */
+static void progDrawPowerBadge(void)
+{
+  if (!app.power_on)
+  {
+    return;
+  }
+  const char *text = app.power.out_3v3 && app.power.out_5v ? "!3.3V&5V" : app.power.out_3v3 ? "!3.3V" : "!5V";
+  int         w    = progDrawMiniText(0, 0, text, black, false) + 6;
+  lcdDrawFillRoundRect(0, 0, w, 11, 3, white);
+  progDrawMiniText(3, 2, text, black, true);
 }
 
 typedef enum
@@ -1239,6 +1614,532 @@ static void progDrawProgress(int y, unsigned pct, bool busy)
   }
 }
 
+/* Damped oscillation: amp at dt = 0, settling with the given decay and period (s). */
+static float progSpring(float dt, float amp, float decay, float period)
+{
+  return dt < 0 ? 0 : amp * expf(-dt / decay) * cosf(6.2832f * dt / period);
+}
+
+static float progEaseOutBack(float q)
+{
+  float c1 = 1.70158f, c3 = c1 + 1.0f, u = q - 1.0f;
+  return 1.0f + c3 * u * u * u + c1 * u * u;
+}
+
+static void progPixelColor(int x, int y, uint16_t color)
+{
+  if (x >= 0 && x < LCD_WIDTH && y >= 0 && y < LCD_HEIGHT)
+  {
+    lcdDrawPixel(x, y, color);
+  }
+}
+
+static void progPixel(int x, int y)
+{
+  progPixelColor(x, y, white);
+}
+
+/* Filled ellipse; a black one first gives the white one an outline against the stripes. */
+static void progFillEllipse(float cx, float cy, float rx, float ry, uint16_t color)
+{
+  for (int dy = -(int)ry; dy <= (int)ry; dy++)
+  {
+    float half = rx * sqrtf(fmaxf(0.0f, 1.0f - (dy * dy) / (ry * ry)));
+    for (int dx = -(int)half; dx <= (int)half; dx++)
+    {
+      progPixelColor((int)lroundf(cx) + dx, (int)lroundf(cy) + dy, color);
+    }
+  }
+}
+
+/* The 16x26 font scaled about its centre; scale 1 matches lcdPrintf. */
+static void progDrawBigText(float cx, int y, const char *text, float scale)
+{
+  int   n    = (int)strlen(text);
+  float w    = n * 16 * scale;
+  float left = cx - w / 2.0f;
+  float top  = y + 13.0f - 13.0f * scale;
+  for (int j = 0; j < (int)(26 * scale + 1); j++)
+  {
+    int v = (int)(j / scale);
+    if (v >= 26)
+    {
+      break;
+    }
+    for (int x = (int)ceilf(left); x <= (int)(left + w); x++)
+    {
+      int u = (int)((x - left) / scale);
+      if (u >= 0 && u < n * 16 && ((font_16x26.data[(text[u / 16] - 32) * 26 + v] << (u % 16)) & 0x8000))
+      {
+        progPixel(x, (int)(top + j));
+      }
+    }
+  }
+}
+
+/* Upward arc between 40 and 140 degrees; every'th sample only, for dotted or fading arcs. */
+static void progDrawArc(int cx, int cy, float r, int every, bool thick)
+{
+  int n = (int)(r * 1.75f) + 4;
+  for (int i = 0; i <= n; i += every)
+  {
+    float a = 0.698f + 1.745f * i / n;
+    for (int k = 0; k <= (thick ? 1 : 0); k++)
+    {
+      progPixel(cx + (int)lroundf((r + k) * cosf(a)), cy - (int)lroundf((r + k) * sinf(a)));
+    }
+  }
+}
+
+/* Elapsed seconds at the top right; returns its left edge. */
+static int progDrawElapsed(void)
+{
+  char          text[12];
+  unsigned long seconds = (millis() - app.job_start) / 1000;
+  snprintf(text, sizeof(text), "%lus", seconds > 99999 ? 99999 : seconds);
+  int x = 126 - (int)strlen(text) * 7;
+  lcdPrintf(x, 0, white, "%s", text);
+  return x;
+}
+
+/* Wi-Fi scan and join: arcs light up from the centre with a springy overshoot, a ripple runs outwards,
+ * and the dot squashes at the start of every wave. */
+static void progDrawRadar(void)
+{
+  char title[24];
+  if (app.job == JOB_SCAN)
+  {
+    snprintf(title, sizeof(title), "Wi-Fi scan");
+  }
+  else
+  {
+    snprintf(title, sizeof(title), "%s %.18s", app.join_mode == NET_MODE_LTE ? "LTE" : "Join",
+             app.join_mode == NET_MODE_LTE ? app.join_secret : app.join_ssid);
+  }
+  int right = progDrawElapsed();
+  lcdPrintf(2, 0, white, "%.*s", (right - 6) / 7, title);
+
+  const float cycle = 1.4f;
+  float       t     = (float)(millis() - app.job_start) / 1000.0f;
+  float       p     = fmodf(t, cycle);
+  int         cx = 64, cy = 47;
+  float       s  = progSpring(p, 0.45f, 0.09f, 0.18f); /* Dot: squash (wide, low) then stretch. */
+  int         dw = (int)lroundf(5 * (1 + s)), dh = (int)lroundf(5 * (1 - s));
+  dw            = dw < 3 ? 3 : dw;
+  dh            = dh < 2 ? 2 : dh;
+  for (int y = 0; y < dh; y++)
+  {
+    for (int x = 0; x < dw; x++)
+    {
+      progPixel(cx - dw / 2 + x, cy + 2 - y);
+    }
+  }
+  for (int i = 0; i < 3; i++)
+  {
+    float on = 0.12f + 0.18f * i; /* Inner arc first. */
+    if (p < on)
+    {
+      continue;
+    }
+    float r = 9.0f + 7.5f * i + progSpring(p - on, 2.5f, 0.07f, 0.15f);
+    progDrawArc(cx, cy, r, p > 1.05f ? 2 + (int)((p - 1.05f) * 10) : 1, p <= 1.05f);
+  }
+  if (p > 0.75f) /* Ripple fading as it spreads. */
+  {
+    float q = (p - 0.75f) / (cycle - 0.75f);
+    progDrawArc(cx, cy, 27.0f + 6.0f * q, 2 + (int)(q * 5), false);
+  }
+  progDrawHint(app.cancel ? NULL : "M", app.cancel ? "Stopping..." : "stop", false);
+}
+
+/* Install and Hub list: the file name slides in, the percent pops when it changes, and the bar follows on a
+ * spring with a jelly head that stretches with speed and wobbles when a new file starts. */
+static void progDrawInstall(void)
+{
+  uint32_t now = millis();
+  unsigned pct = app.total ? (unsigned)(((uint64_t)app.done * 100) / app.total) : 0;
+  pct          = pct > 100 ? 100 : pct;
+  float dt     = (float)(now - app.bar_time) / 1000.0f;
+  if (strncmp(app.stage_name, app.stage, sizeof(app.stage_name) - 1))
+  {
+    snprintf(app.stage_name, sizeof(app.stage_name), "%s", app.stage);
+    app.stage_at = now;
+    app.bar_v -= 90.0f; /* A new file shakes the bar. */
+  }
+  if (pct != app.pct_seen)
+  {
+    app.pct_seen = pct;
+    app.pct_at   = now;
+  }
+
+  int   right = progDrawElapsed();
+  float q     = fminf(1.0f, (float)(now - app.stage_at) / 280.0f);
+  int   x     = 2 + (int)lroundf(70.0f * (1.0f - progEaseOutBack(q)));
+  int   room  = (right - 4 - x) / 7;
+  if (room > 0)
+  {
+    lcdPrintf(x < 0 ? 0 : x, 0, white, "%.*s", room, app.stage_name);
+  }
+
+  char text[8];
+  snprintf(text, sizeof(text), "%u%%", pct);
+  float pop = 1.0f + progSpring((float)(now - app.pct_at) / 1000.0f, 0.2f, 0.08f, 0.2f);
+  progDrawBigText(64.0f, 11, text, pop < 0.85f ? 0.85f : pop);
+
+  /* Spring-damper towards the target, underdamped for a little overshoot. */
+  const int y      = 39;
+  float     target = pct * (float)BAR_W / 100.0f;
+  if (dt > 0.5f || app.done == 0)
+  {
+    app.bar_px = target;
+    app.bar_v  = 0;
+    dt         = 0;
+  }
+  for (float step = fminf(dt, 0.1f); step > 0; step -= 0.01f) /* Fixed sub-steps keep the spring stable. */
+  {
+    float h = fminf(step, 0.01f);
+    app.bar_v += (160.0f * (target - app.bar_px) - 10.0f * app.bar_v) * h;
+    app.bar_px += app.bar_v * h;
+  }
+  app.bar_px   = fmaxf(0.0f, fminf((float)BAR_W, app.bar_px));
+  app.bar_time = now;
+  if (app.done == 0)
+  {
+    progDrawProgress(y, 0, true); /* Waiting for the first byte (TLS handshake). */
+  }
+  else
+  {
+    lcdDrawRoundRect(4, y, BAR_W + 8, 10, 4, white);
+    float t     = (float)(now - app.job_start) / 1000.0f;
+    int   march = (int)(t * 24.0f), width = (int)(app.bar_px + 0.5f);
+    for (int bx = 0; bx < width; bx++)
+    {
+      for (int r = bx == 0 ? 1 : 0; r < (bx == 0 ? 5 : 6); r++)
+      {
+        if (((bx - r - march) % 8 + 8) % 8 < 6)
+        {
+          progPixel(8 + bx, y + 2 + r);
+        }
+      }
+    }
+    /* Jelly head: taller and thinner the faster it moves, bulging past the capsule, outlined in black. */
+    float stretch = fminf(fabsf(app.bar_v) / 35.0f, 2.5f);
+    float ry = 3.6f + stretch, rx = fmaxf(2.0f, 3.4f - stretch * 0.5f);
+    float hx = 8.0f + app.bar_px, hy = y + 4.5f;
+    progFillEllipse(hx, hy, rx + 1.0f, ry + 1.0f, black);
+    progFillEllipse(hx, hy, rx, ry, white);
+  }
+  progDrawHint(app.cancel ? NULL : "M", app.cancel ? "Stopping..." : "stop", false);
+}
+
+/* Start of a label that is width characters wide on screen; a longer one pauses, scrolls, then pauses at its end. */
+static const char *progScroll(const char *text, unsigned width)
+{
+  unsigned length = strlen(text);
+  if (length <= width)
+  {
+    return text;
+  }
+  app.marquee     = true;
+  unsigned offset = (millis() / SCROLL_MS) % (length - width + 6);
+  offset          = offset < 3 ? 0 : offset - 3;
+  return text + (offset > length - width ? length - width : offset);
+}
+
+static void progDrawNoCard(const char *hint)
+{
+  progDrawIcon(5, 21, icon_card, white, 2);
+  lcdPrintf(39, 19, white, app.detected ? "SD not ready" : "No SD card");
+  lcdPrintf(39, 34, white, "%s", hint ? hint : app.detected ? "Check FAT32" : "Insert card");
+}
+
+/* Header, up to three rows and the selection bar; menus (badge) show the SD state instead of the position. */
+static void progDrawList(const char *title, unsigned count, unsigned selected, bool badge,
+                         void (*fill)(unsigned item, row_t *row))
+{
+  progDrawHeader(title);
+  if (badge)
+  {
+    progDrawSdBadge();
+  }
+  else
+  {
+    char position[12];
+    snprintf(position, sizeof(position), "%u/%u", selected + 1, count);
+    lcdPrintf(126 - (int)strlen(position) * 7, 0, white, "%s", position);
+  }
+  unsigned first = selected > 2 ? selected - 2 : 0;
+  for (unsigned line = 0; line < 3 && first + line < count; line++)
+  {
+    unsigned item = first + line;
+    bool     sel  = item == selected;
+    int      y    = 15 + line * 12;
+    row_t    row  = {"", "", NULL, -1};
+    fill(item, &row);
+    int x     = row.icon ? 22 : 12;
+    int right = 121; /* Right edge of the bars and the right column. */
+    if (row.bars >= 0)
+    {
+      for (int b = 0; b < 4; b++) /* Four bars, 2 px wide, rising to the right. */
+      {
+        int h = b < row.bars ? 2 + 2 * b : 1;
+        lcdDrawFillRect(right - 11 + b * 3, y + 10 - h, 2, h, white);
+      }
+      right -= 14;
+    }
+    int end = row.right[0] ? right - 4 - (int)strlen(row.right) * 7 : row.icon ? 113 : right;
+    int n   = (end - x) / 7;
+    if (sel)
+    {
+      progDrawSelection(y, 12);
+      lcdPrintf(row.icon ? 116 : 5, y + 1, white, ">");
+    }
+    if (row.icon)
+    {
+      progDrawIcon(5, y, row.icon, white, 1);
+    }
+    lcdPrintf(x, y + 1, white, "%.*s", n, sel ? progScroll(row.text, n) : row.text);
+    if (row.right[0])
+    {
+      lcdPrintf(right - (int)strlen(row.right) * 7, y + 1, white, "%s", row.right);
+    }
+  }
+  if (count > 3)
+  {
+    lcdDrawFillRect(126, 15, 1, 36, white);
+    unsigned height = 36 * 3 / count;
+    unsigned y      = 15 + (36 - height) * selected / (count - 1);
+    lcdDrawFillRect(125, y, 3, height, white);
+  }
+}
+
+static void progMenuRow(unsigned item, row_t *row)
+{
+  static const char     *items[] = {"Auto setup", "Manual", "Storage", "Network", "Power", "Info"};
+  static const uint16_t *icons[] = {icon_setup, icon_flash, icon_card, icon_wifi, icon_power, icon_info};
+  row->text                      = items[item];
+  row->icon                      = icons[item];
+}
+
+static void progPowerRow(unsigned item, row_t *row)
+{
+  static const char *items[] = {"3.3V out", "5V out", "Supply"};
+  row->text                  = items[item];
+  if (item == 2)
+  {
+    strcpy(row->right, app.power.mode == PROG_POWER_ALWAYS ? "Always" : "Job");
+  }
+  else
+  {
+    strcpy(row->right, (item ? app.power.out_5v : app.power.out_3v3) ? "ON" : "OFF");
+  }
+}
+
+static void progManualRow(unsigned item, row_t *row)
+{
+  row->text = item ? "Erase" : "Flash";
+  row->icon = item ? icon_erase : icon_flash;
+}
+
+static void progStorageRow(unsigned item, row_t *row)
+{
+  row->text = item ? "SD Delete" : "Installed bin";
+  row->icon = item ? icon_erase : icon_list;
+}
+
+static const char *progPickTitle(void)
+{
+  return app.pick == PICK_AUTO    ? "Auto setup"
+         : app.pick == PICK_FLASH ? "Flash"
+         : app.pick == PICK_ERASE ? "Erase"
+         : app.pick == PICK_HUB   ? "Install"
+                                  : "Installed";
+}
+
+static void progChipRow(unsigned item, row_t *row)
+{
+  prog_target_t target = item < PROG_TARGETS ? (prog_target_t)item : PROG_TARGET_NONE;
+  row->text            = progTargetLabel(target);
+  if (app.pick == PICK_AUTO)
+  {
+    const char *id = app.auto_config.project[target];
+    snprintf(row->right, sizeof(row->right), "%.7s", id[0] ? id : "---");
+  }
+  else if (app.pick == PICK_HUB)
+  {
+    snprintf(row->right, sizeof(row->right), "%u", progHubCount(target, NULL));
+  }
+  else if (app.pick != PICK_ERASE)
+  {
+    snprintf(row->right, sizeof(row->right), "%u", progCatalogFilter(&app.catalog, target, progUsableOnly(), NULL, 0));
+  }
+}
+
+static void progPackageRow(unsigned item, row_t *row)
+{
+  const prog_catalog_entry_t *entry = progPackageAt(item);
+  row->text                         = entry ? entry->name : "(None)";
+  if (entry && entry->error)
+  {
+    strcpy(row->right, "!"); /* Cannot be written; Details names the reason. */
+  }
+  else if (entry && progAutoBound(entry))
+  {
+    strcpy(row->right, "*"); /* Auto uses this package for its chip. */
+  }
+}
+
+static void progNetworkRow(unsigned item, row_t *row)
+{
+  static const char     *items[] = {"Connect", "Install", "Status"};
+  static const uint16_t *icons[] = {icon_wifi, icon_get, icon_info};
+  row->text                      = items[item];
+  row->icon                      = icons[item];
+}
+
+static void progConnectRow(unsigned item, row_t *row)
+{
+  static const char *items[] = {"Wi-Fi", "LTE", "Off"};
+  row->text                  = items[item];
+  if (item + 1 == netSettings()->mode || (item == 2 && netSettings()->mode == NET_MODE_OFF))
+  {
+    strcpy(row->right, "*"); /* Saved choice, rejoined at power-up. */
+  }
+}
+
+static int8_t progBars(int8_t rssi)
+{
+  return rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : rssi >= -85 ? 1 : 0;
+}
+
+static void progWifiRow(unsigned item, row_t *row)
+{
+  if (item == app.ap_count)
+  {
+    row->text = "(Scan again)";
+    return;
+  }
+  const net_ap_t *ap = &app.aps[item];
+  row->text          = ap->ssid;
+  row->bars          = progBars(ap->rssi);
+  if (netStorePassword(netSettings(), ap->ssid))
+  {
+    strcpy(row->right, "*"); /* Password saved after an earlier connection. */
+  }
+  else if (!ap->secure)
+  {
+    strcpy(row->right, "o"); /* Open network. */
+  }
+}
+
+static void progApnRow(unsigned item, row_t *row)
+{
+  row->text = net_apns[item].label;
+  if (netSettings()->mode == NET_MODE_LTE && !strcmp(netSettings()->apn, net_apns[item].apn))
+  {
+    strcpy(row->right, "*");
+  }
+}
+
+static void progKbdMenuRow(unsigned item, row_t *row)
+{
+  row->text = kbdMenuItem(&app.kbd, item);
+}
+
+/* "=" same version on the card, "^" another version (update), blank when not installed. */
+static void progHubRow(unsigned item, row_t *row)
+{
+  const hub_project_t        *project = progHubAt(item);
+  const prog_catalog_entry_t *entry   = progHubInstalled(project);
+  row->text                           = project ? project->name : "";
+  if (entry)
+  {
+    strcpy(row->right, strcmp(entry->version, project->version) ? "^" : "=");
+  }
+}
+
+/* Footer-sized (11 characters) link summary. "No ESP" is about the module; everything else is about the
+ * network, so a responding ESP that has not joined anything reads "ESP ready", not "offline". */
+static const char *progNetState(void)
+{
+  static char       text[12];
+  const net_info_t *info = &app.net_info;
+  const char       *mode = info->mode == NET_MODE_LTE ? "LTE" : "Wi-Fi";
+  if (!netIsPresent())
+  {
+    return "No ESP";
+  }
+  if (info->mode == NET_MODE_OFF || info->mode > NET_MODE_LTE || info->state == NET_STATE_IDLE)
+  {
+    return "ESP ready";
+  }
+  snprintf(text, sizeof(text), "%s%s", mode,
+           info->state == NET_STATE_CONNECTED ? " on" : info->state == NET_STATE_CONNECTING ? "..." : " fail");
+  return text;
+}
+
+/* A wheel glyph; space has no visible glyph, so it is drawn as an open box. */
+static void progDrawWheelChar(int x, int y, char c, bool big)
+{
+  if (c != ' ')
+  {
+    lcdPrintf(x, y, white, "%c", c);
+    return;
+  }
+  int w = big ? 9 : 5, h = big ? 4 : 3, bottom = y + (big ? 15 : 8);
+  lcdDrawFillRect(x + 1, bottom, w, 1, white);
+  lcdDrawFillRect(x + 1, bottom - h, 1, h, white);
+  lcdDrawFillRect(x + w, bottom - h, 1, h, white);
+}
+
+static void progDrawKeyboard(void)
+{
+  const kbd_t *k = &app.kbd;
+  char         text[24];
+  if (k->menu)
+  {
+    progDrawList("Keyboard", kbdMenuCount(), k->menu_selected, false, progKbdMenuRow);
+    progDrawFooter("SEL:OK", "M:Close");
+    return;
+  }
+  snprintf(text, sizeof(text), "%u/%u", k->len, k->max);
+  int right = 126 - (int)strlen(text) * 7;
+  lcdPrintf(right, 0, white, "%s", text);
+  lcdPrintf(2, 0, white, "%.*s", (right - 4) / 7, app.join_ssid);
+  lcdDrawFillRect(0, 12, 128, 1, white);
+  /* Entry field: the last 16 characters; hidden text shows only the newest character. */
+  unsigned first = k->len > 16 ? k->len - 16 : 0;
+  for (unsigned i = first; i < k->len; i++)
+  {
+    char c = k->shown || i + 1 == k->len ? k->text[i] : '*';
+    progDrawWheelChar(2 + (int)(i - first) * 7, 15, c, false);
+  }
+  if ((millis() / SCROLL_MS) % 2)
+  {
+    lcdDrawFillRect(2 + (int)(k->len - first) * 7, 25, 6, 1, white); /* Blinking cursor. */
+  }
+  app.marquee = true;
+  /* Wheel: the current character large in a box, neighbours small on both sides. */
+  lcdDrawFillRoundRect(52, 28, 24, 22, 3, white);
+  lcdSetFont(LCD_FONT_11x18);
+  char c = kbdChar(k, 0);
+  if (c == ' ')
+  {
+    lcdDrawRect(55, 34, 18, 10, black);
+  }
+  else
+  {
+    lcdPrintf(58, 30, black, "%c", c);
+  }
+  lcdSetFont(LCD_FONT_07x10);
+  for (int i = 1; i <= 4; i++)
+  {
+    progDrawWheelChar(52 - i * 12 + 1, 34, kbdChar(k, -i), false);
+    progDrawWheelChar(76 + (i - 1) * 12 + 4, 34, kbdChar(k, i), false);
+  }
+  progDrawFooter(kbdGroup(k), "Hold SEL:Menu");
+}
+
 static void progDraw(void)
 {
   if (!app.dirty || !lcdIsInit())
@@ -1246,6 +2147,7 @@ static void progDraw(void)
     return;
   }
   app.dirty     = false;
+  app.marquee   = false;
   app.draw_time = millis();
   lcdSetFont(LCD_FONT_07x10);
   lcdClearBuffer(black);
@@ -1263,28 +2165,27 @@ static void progDraw(void)
     {
       progDrawHint("SEL", ready ? "start" : "set up", anim.key);
     }
+    progDrawPowerBadge();
   }
   else if (app.screen == MENU)
   {
-    progDrawHeader("Menu");
-    progDrawSdBadge();
-    const char     *items[] = {"Auto setup", "Flash", "Erase", "Info"};
-    const uint16_t *icons[] = {icon_setup, icon_flash, icon_erase, icon_info};
-    unsigned        first   = app.menu_selected > 2 ? app.menu_selected - 2 : 0;
-    for (unsigned row = 0; row < 3; row++)
-    {
-      int      y     = 15 + row * 12;
-      unsigned item  = first + row;
-      bool     sel   = item == app.menu_selected;
-      if (sel)
-      {
-        progDrawSelection(y, 12);
-        lcdPrintf(111, y + 1, white, ">");
-      }
-      progDrawIcon(8, y, icons[item], white, 1);
-      lcdPrintf(29, y + 1, white, "%s", items[item]);
-    }
+    progDrawList("Menu", 6, app.menu_selected, true, progMenuRow);
     progDrawFooter("SEL:Open", "M:Auto");
+  }
+  else if (app.screen == MANUAL)
+  {
+    progDrawList("Manual", 2, app.manual_selected, true, progManualRow);
+    progDrawFooter("SEL:Open", "M:Back");
+  }
+  else if (app.screen == STORAGE)
+  {
+    progDrawList("Storage", 2, app.storage_selected, true, progStorageRow);
+    progDrawFooter("SEL:Open", "M:Back");
+  }
+  else if (app.screen == POWER)
+  {
+    progDrawList("Power", 3, app.power_selected, false, progPowerRow);
+    progDrawFooter(app.power_saved ? "SEL:Change" : "Not saved", "M:Back");
   }
   else if (app.screen == INFO)
   {
@@ -1295,132 +2196,167 @@ static void progDraw(void)
     lcdSetFont(LCD_FONT_07x10);
     progDrawFooter("Info", "M:Back");
   }
-  else if (app.screen == FILES)
+  else if (app.screen == CHIPS)
   {
-    progDrawHeader("Flash");
-    if (!app.mounted)
+    if (!app.mounted && app.pick != PICK_ERASE)
     {
-      progDrawIcon(5, 21, icon_card, white, 2);
-      lcdPrintf(39, 19, white, app.detected ? "SD not ready" : "No SD card");
-      lcdPrintf(39, 34, white, app.detected ? "Check FAT32" : "Insert card");
-    }
-    else if (!app.count)
-    {
-      lcdPrintf(29, 19, white, "No firmware");
-      lcdPrintf(2, 35, white, "%.17s", app.error[0] ? app.error : "Add files to SD");
+      progDrawHeader(progPickTitle());
+      progDrawNoCard(NULL);
+      progDrawFooter("", "M:Back");
     }
     else
     {
-      char count[24];
-      snprintf(count, sizeof(count), "%u/%u", app.selected + 1, app.count);
-      lcdPrintf(126 - (int)strlen(count) * 7, 0, white, "%s", count);
-      unsigned first = (app.selected / 3) * 3;
-      for (unsigned row = 0; row < 3 && first + row < app.count; row++)
+      progDrawList(progPickTitle(), progChipRows(), app.target, false, progChipRow);
+      /* Installed bin is where a card with too many packages is noticed; the rest are left out by ID order. */
+      progDrawFooter(app.pick == PICK_AUTO                            ? "SEL:Set"
+                     : app.pick == PICK_INSTALLED && app.catalog.more ? "16+ on SD"
+                                                                      : "SEL:Open",
+                     "M:Back");
+    }
+  }
+  else if (app.screen == PACKAGES)
+  {
+    const char *title = progTargetLabel((prog_target_t)app.target);
+    if (!app.mounted || !progPackageRows())
+    {
+      progDrawHeader(title);
+      if (!app.mounted)
       {
-        bool sel = first + row == app.selected;
-        int  y   = 15 + row * 12;
-        if (sel)
+        progDrawNoCard(NULL);
+      }
+      else
+      {
+        lcdPrintf(29, 19, white, "No firmware");
+        if (app.catalog_error)
         {
-          progDrawSelection(y, 12);
+          lcdPrintf(2, 35, white, "SD error %u", app.catalog_error);
         }
-        lcdPrintf(5, y + 1, white, "%c%.15s", sel ? '>' : ' ', app.ids[first + row]);
+        else
+        {
+          lcdPrintf(2, 35, white, "Add files to SD");
+        }
       }
-      if (app.count > 3)
-      {
-        lcdDrawFillRect(126, 15, 1, 36, white);
-        unsigned height = 36 * 3 / app.count;
-        unsigned y      = 15 + (36 - height) * app.selected / (app.count - 1);
-        lcdDrawFillRect(125, y, 3, height, white);
-      }
-    }
-    progDrawFooter(app.mounted && app.count ? "SEL:Open" : "", "M:Back");
-  }
-  else if (app.screen == AUTO_SETUP)
-  {
-    progDrawHeader("Auto setup");
-    lcdPrintf(105, 0, white, "%u/%u", app.auto_selected + 1, PROG_AUTO_TARGETS);
-    unsigned first = app.auto_selected > 2 ? app.auto_selected - 2 : 0;
-    for (unsigned row = 0; row < 3 && first + row < PROG_AUTO_TARGETS; row++)
-    {
-      unsigned    item     = first + row;
-      bool        selected = item == app.auto_selected;
-      int         y        = 15 + row * 12;
-      const char *id       = app.auto_config.project[item];
-      if (selected)
-      {
-        progDrawSelection(y, 12);
-      }
-      lcdPrintf(4, y + 1, white, "%-8s %.8s", progTargetName(item), id[0] ? id : "---");
-    }
-    progDrawFooter("SEL:Set", "M:Back");
-  }
-  else if (app.screen == AUTO_FILES)
-  {
-    progDrawHeader(progTargetName(app.auto_target));
-    char position[12];
-    snprintf(position, sizeof(position), "%u/%u", app.selected + 1, app.count + 1);
-    lcdPrintf(126 - (int)strlen(position) * 7, 0, white, "%s", position);
-    if (!app.mounted)
-    {
-      lcdPrintf(2, 20, white, "Insert SD card");
+      progDrawFooter("", "M:Back");
     }
     else
     {
-      unsigned first = (app.selected / 3) * 3;
-      for (unsigned row = 0; row < 3 && first + row <= app.count; row++)
-      {
-        unsigned item     = first + row;
-        bool     selected = item == app.selected;
-        int      y        = 15 + row * 12;
-        if (selected)
-        {
-          progDrawSelection(y, 12);
-        }
-        const char *name   = item ? app.auto_names[item - 1] : "(None)";
-        unsigned    length = strlen(name);
-        if (selected && length > 15)
-        {
-          unsigned offset = (millis() / 400) % (length - 15 + 6);
-          offset          = offset < 3 ? 0 : offset - 3;
-          if (offset > length - 15)
-          {
-            offset = length - 15;
-          }
-          name += offset;
-        }
-        lcdPrintf(5, y + 1, white, "%c%.15s", selected ? '>' : ' ', name);
-      }
+      progDrawList(title, progPackageRows(), app.selected, false, progPackageRow);
+      progDrawFooter(app.pick == PICK_AUTO        ? (app.error[0] ? "Save failed" : "SEL:Save")
+                     : app.pick == PICK_INSTALLED ? "SEL:Info"
+                                                  : "SEL:Open",
+                     "M:Back");
     }
-    progDrawFooter(app.error[0] ? "Save failed" : "SEL:Save", "M:Back");
   }
-  else if (app.screen == ERASE_TARGET)
+  else if (app.screen == DETAILS)
   {
-    progDrawHeader("Erase / Target");
-    const char *items[] = {"H723", "ESP32", "ESP32-S3", "ESP32-C3"};
-    unsigned    first   = app.erase_target > 2 ? app.erase_target - 2 : 0;
-    for (unsigned row = 0; row < 3 && first + row < 4; row++)
+    const prog_catalog_entry_t *entry = progPackageAt(app.selected);
+    char                        text[24];
+    /* "*" marks the Auto package, as in the list. */
+    snprintf(text, sizeof(text), "%s%s", progTargetLabel(entry->target), progAutoBound(entry) ? " *" : "");
+    progDrawHeader(text);
+    snprintf(text, sizeof(text), "%u/%u", app.selected + 1, progPackageRows());
+    lcdPrintf(126 - (int)strlen(text) * 7, 0, white, "%s", text);
+    lcdPrintf(2, 16, white, "%.18s", progScroll(entry->name, 18));
+    lcdPrintf(2, 28, white, "%.18s", entry->id);
+    if (entry->error)
     {
-      bool selected = first + row == app.erase_target;
-      int  y        = 15 + row * 12;
-      if (selected)
-      {
-        progDrawSelection(y, 12);
-      }
-      lcdPrintf(5, y + 1, white, "%c%s", selected ? '>' : ' ', items[first + row]);
+      lcdPrintf(2, 40, white, "%.18s", progScroll(entry->error, 18));
     }
-    lcdPrintf(105, 0, white, "%u/4", app.erase_target + 1);
+    else
+    {
+      snprintf(text, sizeof(text), "%lu B, %u BIN", (unsigned long)entry->size, entry->images);
+      lcdPrintf(2, 40, white, "%.18s", text);
+    }
+    /* Version from release.txt; packages copied before the Hub added it have none. */
+    text[0] = 0;
+    if (entry->version[0])
+    {
+      snprintf(text, sizeof(text), "v%.10s", entry->version);
+    }
+    progDrawFooter(text, "M:Back");
+  }
+  else if (app.screen == NETWORK)
+  {
+    progDrawList("Network", 3, app.network_selected, false, progNetworkRow);
+    progDrawFooter(progNetState(), "M:Back");
+  }
+  else if (app.screen == CONNECT)
+  {
+    progDrawList("Connect", 3, app.connect_selected, false, progConnectRow);
     progDrawFooter("SEL:Open", "M:Back");
+  }
+  else if (app.screen == WIFI_LIST)
+  {
+    progDrawList("Wi-Fi", app.ap_count + 1, app.ap_selected, false, progWifiRow);
+    progDrawFooter(app.ap_selected == app.ap_count ? "SEL:Scan" : "SEL:Join", "M:Back");
+  }
+  else if (app.screen == KEYBOARD)
+  {
+    progDrawKeyboard();
+  }
+  else if (app.screen == APN_LIST)
+  {
+    progDrawList("LTE APN", net_apn_count, app.apn_selected, false, progApnRow);
+    progDrawFooter("SEL:Join", "M:Back");
+  }
+  else if (app.screen == NET_STATUS)
+  {
+    const net_info_t *info = &app.net_info;
+    char              text[24];
+    progDrawHeader("Status");
+    bool joined = netIsPresent() && info->mode != NET_MODE_OFF && info->state != NET_STATE_IDLE;
+    lcdPrintf(2, 16, white, "%.18s", !netIsPresent() || joined ? progNetState() : "Not connected");
+    if (netIsPresent() && info->rssi)
+    {
+      snprintf(text, sizeof(text), "%ddBm", info->rssi);
+      lcdPrintf(126 - (int)strlen(text) * 7, 16, white, "%s", text);
+    }
+    lcdPrintf(2, 28, white, "%.18s", netIsPresent() ? progScroll(info->detail, 18) : "Check UART/power");
+    if (info->state == NET_STATE_CONNECTED)
+    {
+      lcdPrintf(2, 40, white, "IP %u.%u.%u.%u", info->ip[0], info->ip[1], info->ip[2], info->ip[3]);
+    }
+    progDrawFooter(netIsPresent() ? netEspVersion() : "", "M:Back");
+  }
+  else if (app.screen == HUB_LIST)
+  {
+    const char *title = progTargetLabel((prog_target_t)app.target);
+    if (!app.hub_view_count)
+    {
+      progDrawHeader(title);
+      lcdPrintf(29, 19, white, "No firmware");
+      lcdPrintf(2, 35, white, "on the Hub");
+      progDrawFooter("", "M:Back");
+    }
+    else
+    {
+      progDrawList(title, app.hub_view_count, app.hub_selected, false, progHubRow);
+      progDrawFooter("SEL:Open", "M:Back");
+    }
+  }
+  else if (app.screen == HUB_CONFIRM)
+  {
+    const hub_project_t        *project = progHubAt(app.hub_selected);
+    const prog_catalog_entry_t *entry   = progHubInstalled(project);
+    const char                 *blocked = progHubBlocked(project);
+    char                        text[24];
+    progDrawHeader("Install");
+    lcdPrintf(2, 16, white, "%.18s", progScroll(project->name, 18));
+    snprintf(text, sizeof(text), "v%.10s", project->version);
+    lcdPrintf(2, 28, white, "%s", text);
+    const char *what = !entry ? "new" : strcmp(entry->version, project->version) ? "update" : "same";
+    lcdPrintf(126 - (int)strlen(what) * 7, 28, white, "%s", what);
+    lcdPrintf(2, 40, white, "%.18s", blocked ? blocked : progTargetInfo(project->target)->esp ? project->id : "ST loader OK");
+    progDrawFooter(blocked ? "" : "SEL:Hold 1s", "M:Back");
   }
   else if (app.screen == ERASE_CONFIRM)
   {
     char title[24];
-    snprintf(title, sizeof(title), "Erase / %s", progEraseTargetName());
+    snprintf(title, sizeof(title), "Erase / %s", progTargetLabel((prog_target_t)app.target));
     progDrawHeader(title);
     if (!app.mounted && !progIsEspErase())
     {
-      progDrawIcon(5, 21, icon_card, white, 2);
-      lcdPrintf(39, 19, white, app.detected ? "SD not ready" : "No SD card");
-      lcdPrintf(39, 34, white, "Loader on SD");
+      progDrawNoCard("Loader on SD");
       progDrawFooter("", "M:Back");
     }
     else
@@ -1431,20 +2367,44 @@ static void progDraw(void)
       progDrawFooter("SEL:Hold 1s", "M:Back");
     }
   }
+  else if (app.screen == WIPE_CONFIRM)
+  {
+    progDrawHeader("SD Delete");
+    if (!app.mounted)
+    {
+      progDrawNoCard(NULL);
+      progDrawFooter("", "M:Back");
+    }
+    else
+    {
+      lcdPrintf(2, 16, white, "Delete ALL files");
+      lcdPrintf(2, 28, white, "%u%s firmware", app.catalog.count, app.catalog.more ? "+" : "");
+      lcdPrintf(2, 40, white, app.loader_present ? "ST loader too" : "Cannot be undone");
+      progDrawFooter("SEL:Hold 1s", "M:Back");
+    }
+  }
   else if (app.screen == CONFIRM)
   {
     progDrawHeader("Flash / Confirm");
-    lcdPrintf(2, 16, white, "%.17s", app.manifest.name);
+    lcdPrintf(2, 16, white, "%.17s", app.package.manifest.name);
     lcdPrintf(2, 28, white, "%lu B", (unsigned long)app.image_size);
-    if (app.esp_project)
+    if (app.package.esp_project)
     {
-      lcdPrintf(2, 40, white, "%s / %u BIN", espProjectChipName(app.esp.chip), app.esp.count);
+      lcdPrintf(2, 40, white, "%s / %u BIN", espProjectChipName(app.package.esp.chip), app.package.esp.count);
     }
     else
     {
       lcdPrintf(2, 40, white, "Erase %lu sectors", (unsigned long)((app.image_size + 0x1FFFF) / 0x20000));
     }
     progDrawFooter("SEL:Hold 1s", "M:Back");
+  }
+  else if (app.screen == RUNNING && (app.job == JOB_SCAN || app.job == JOB_JOIN))
+  {
+    progDrawRadar();
+  }
+  else if (app.screen == RUNNING && (app.job == JOB_INSTALL || app.job == JOB_HUB_LIST))
+  {
+    progDrawInstall();
   }
   else if (app.screen == RUNNING)
   {
@@ -1494,308 +2454,611 @@ static void progDraw(void)
   lcdUpdateDraw();
 }
 
+static void progOpen(screen_t screen)
+{
+  app.screen        = screen;
+  app.confirm_armed = false;
+  app.hold_start    = 0;
+  app.dirty         = true;
+}
+
+static void progOpenChips(pick_t pick)
+{
+  app.pick = pick;
+  if (app.target >= progChipRows())
+  {
+    app.target = 0;
+  }
+  progOpen(CHIPS);
+}
+
+static void progOpenPackages(void)
+{
+  app.error[0] = 0;
+  app.selected = 0;
+  progViewBuild();
+  for (unsigned row = 1; app.pick == PICK_AUTO && row < progPackageRows(); row++)
+  {
+    if (progAutoBound(progPackageAt(row)))
+    {
+      app.selected = row; /* Start on the current binding. */
+    }
+  }
+  progOpen(PACKAGES);
+}
+
+/* Keyboard buttons: UP/DN repeat while held, SEL adds on release or opens the menu when held, M deletes. */
+static void progKeyboardKeys(uint32_t buttons, uint32_t pressed, uint32_t released)
+{
+  uint32_t     now    = millis();
+  kbd_result_t result = KBD_EDIT;
+  for (unsigned b = 0; b < 2; b++)
+  {
+    uint32_t  mask = 1U << (b ? BTN_DN : BTN_UP);
+    kbd_key_t key  = b ? KBD_KEY_DN : KBD_KEY_UP;
+    if (pressed & mask)
+    {
+      app.repeat_at = now + REPEAT_MS;
+      kbdKey(&app.kbd, key);
+      app.dirty = true;
+    }
+    else if ((buttons & mask) && (int32_t)(now - app.repeat_at) >= 0)
+    {
+      app.repeat_at = now + REPEAT_STEP_MS;
+      kbdKey(&app.kbd, key);
+      app.dirty = true;
+    }
+  }
+  if (pressed & (1U << BTN_SEL))
+  {
+    app.sel_down = now;
+    app.sel_used = false;
+  }
+  if ((buttons & (1U << BTN_SEL)) && !app.sel_used && (uint32_t)(now - app.sel_down) >= MENU_HOLD_MS)
+  {
+    app.sel_used = true;
+    result       = kbdKey(&app.kbd, KBD_KEY_MENU);
+    app.dirty    = true;
+  }
+  if ((released & (1U << BTN_SEL)) && !app.sel_used)
+  {
+    result    = kbdKey(&app.kbd, KBD_KEY_ADD);
+    app.dirty = true;
+  }
+  if (released & (1U << BTN_M))
+  {
+    result    = kbdKey(&app.kbd, KBD_KEY_DEL);
+    app.dirty = true;
+  }
+  if (result == KBD_CANCEL)
+  {
+    progOpen(WIFI_LIST);
+  }
+  else if (result == KBD_DONE)
+  {
+    snprintf(app.join_secret, sizeof(app.join_secret), "%s", app.kbd.text);
+    app.join_mode = NET_MODE_WIFI;
+    app.job       = JOB_JOIN;
+    progRunJob();
+  }
+}
+
+/* Open networks join at once; a saved password is offered for editing, so a changed one can be fixed. */
+static void progSelectWifi(void)
+{
+  if (app.ap_selected == app.ap_count)
+  {
+    app.job = JOB_SCAN;
+    progRunJob();
+    return;
+  }
+  const net_ap_t *ap = &app.aps[app.ap_selected];
+  snprintf(app.join_ssid, sizeof(app.join_ssid), "%s", ap->ssid);
+  if (!ap->secure)
+  {
+    app.join_secret[0] = 0;
+    app.join_mode      = NET_MODE_WIFI;
+    app.job            = JOB_JOIN;
+    progRunJob();
+    return;
+  }
+  const char *saved = netStorePassword(netSettings(), ap->ssid);
+  kbdBegin(&app.kbd, NET_PASSWORD_SIZE - 1, saved, false);
+  app.sel_used = true; /* The SEL press that opened the keyboard must not type a character. */
+  progOpen(KEYBOARD);
+}
+
+static void progOpenHubList(void)
+{
+  app.hub_view_count = progHubCount((prog_target_t)app.target, app.hub_view);
+  app.hub_selected   = 0;
+  progOpen(HUB_LIST);
+}
+
+/* Where SEL or M on a manual RESULT returns to. */
+static screen_t progResultBack(void)
+{
+  switch (app.job)
+  {
+    case JOB_FLASH:
+      return PACKAGES;
+    case JOB_ERASE:
+      return CHIPS;
+    case JOB_WIPE:
+      return STORAGE;
+    case JOB_SCAN:
+      return CONNECT;
+    case JOB_JOIN:
+      return !app.error[0] ? NETWORK : app.join_mode == NET_MODE_WIFI ? WIFI_LIST : APN_LIST;
+    case JOB_INSTALL:
+      return HUB_LIST;
+    default:
+      return NETWORK;
+  }
+}
+
+/* UP/DN wrap around a list; true when the cursor moved. */
+static bool progStep(unsigned *cursor, unsigned count, uint32_t pressed)
+{
+  if (!count || !(pressed & ((1U << BTN_UP) | (1U << BTN_DN))))
+  {
+    return false;
+  }
+  *cursor   = (pressed & (1U << BTN_UP)) ? (*cursor + count - 1) % count : (*cursor + 1) % count;
+  app.dirty = true;
+  return true;
+}
+
+/* Destructive jobs start only after SEL is released and then held for a second. */
+static void progHold(uint32_t buttons, bool ready)
+{
+  if (!ready)
+  {
+    app.confirm_armed = false;
+    app.hold_start    = 0;
+  }
+  else if (!(buttons & (1U << BTN_SEL)))
+  {
+    app.confirm_armed = true;
+    app.hold_start    = 0;
+  }
+  else if (app.confirm_armed)
+  {
+    if (!app.hold_start)
+    {
+      app.hold_start = millis();
+    }
+    if ((uint32_t)(millis() - app.hold_start) >= 1000)
+    {
+      progRunJob();
+    }
+  }
+}
+
+static void progSelectPackage(void)
+{
+  const prog_catalog_entry_t *entry = progPackageAt(app.selected);
+  if (app.pick == PICK_AUTO)
+  {
+    if (progAutoSave(entry ? entry->id : ""))
+    {
+      progOpen(CHIPS);
+      buzzerBeep(60);
+    }
+    else
+    {
+      snprintf(app.error, sizeof(app.error), "Save failed");
+      app.dirty = true;
+    }
+    return;
+  }
+  if (app.pick == PICK_INSTALLED)
+  {
+    progOpen(DETAILS);
+    return;
+  }
+  app.job      = JOB_FLASH;
+  app.stage    = "OPEN PROJECT";
+  app.error[0] = 0;
+  memset(&app.result, 0, sizeof(app.result));
+  strcpy(app.job_id, entry->id);
+  bool ok = progLoadManifest(app.job_id);
+  if (ok && !app.package.esp_project)
+  {
+    char    path[128];
+    FILINFO info;
+    snprintf(path, sizeof(path), "/prog/fw/%s/%s", app.job_id, app.package.manifest.image);
+    FRESULT e = f_stat(path, &info);
+    if (e != FR_OK)
+    {
+      ok = progIoFail(path, e);
+    }
+    else if ((info.fattrib & AM_DIR) || info.fsize < 8 || info.fsize > 0x100000)
+    {
+      ok = progFail("Invalid image size");
+    }
+    else
+    {
+      app.image_size = (uint32_t)info.fsize;
+    }
+  }
+  progOpen(ok ? CONFIRM : RESULT);
+}
+
 void progUpdate(void)
 {
   bool detected = sdIsDetected(), mounted = detected && fatfsIsMount();
   if (mounted != app.mounted || detected != app.detected)
   {
+    bool card    = mounted && !app.mounted;
     app.mounted  = mounted;
     app.detected = detected;
     app.dirty    = true;
     progAutoLoad();
+    if (card)
+    {
+      progPowerReload();
+    }
+    netSettingsReload(mounted); /* Saved networks belong to the card. */
     /* Keep the result visible even when the card was removed during a job. */
     if (app.screen != RESULT)
     {
-      if (app.screen == AUTO_FILES)
-      {
-        progAutoProjects();
-      }
-      else
-      {
-        progScanProjects();
-      }
+      progRefresh();
     }
-    if (app.screen == CONFIRM)
+    if (app.screen == CONFIRM || app.screen == DETAILS)
     {
-      app.screen = FILES;
+      app.screen = PACKAGES;
+    }
+    if (app.screen == HUB_CONFIRM)
+    {
+      app.screen = HUB_LIST;
     }
     app.confirm_armed = false;
     app.hold_start    = 0;
   }
-  uint32_t buttons = buttonGetData(), pressed = buttons & ~app.last_buttons;
+  uint32_t buttons = buttonGetData(), pressed = buttons & ~app.last_buttons, released = app.last_buttons & ~buttons;
+  bool     back = (pressed & (1U << BTN_M)) != 0, open = (pressed & (1U << BTN_SEL)) != 0;
   app.last_buttons = buttons;
-  if (app.screen == HOME)
+  if ((app.screen == NETWORK || app.screen == NET_STATUS) && (uint32_t)(millis() - app.net_poll) >= NET_POLL_MS)
   {
-    if (pressed & (1U << BTN_M))
-    {
-      app.screen = MENU;
-      app.dirty  = true;
-    }
-    else if ((pressed & (1U << BTN_SEL)) && app.mounted)
-    {
-      if (progAutoAssigned())
-      {
-        progRunAuto();
-      }
-      else
-      {
-        app.auto_selected = 0;
-        app.screen        = AUTO_SETUP;
-        app.dirty         = true;
-      }
-    }
+    app.net_poll = millis();
+    app.net_info = *netInfoCached(); /* Never a link call here: a missing ESP must not stall the screen. */
+    app.dirty    = true;
   }
-  else if (app.screen == MENU)
+  switch (app.screen)
   {
-    if (pressed & (1U << BTN_M))
-    {
-      app.screen = HOME;
-      app.dirty  = true;
-    }
-    if (pressed & (1U << BTN_UP))
-    {
-      app.menu_selected = (app.menu_selected + 3) % 4;
-      app.dirty         = true;
-    }
-    if (pressed & (1U << BTN_DN))
-    {
-      app.menu_selected = (app.menu_selected + 1) % 4;
-      app.dirty         = true;
-    }
-    if (pressed & (1U << BTN_SEL))
-    {
-      app.auto_job      = false;
-      app.erase_job     = app.menu_selected == 2;
-      app.screen        = app.menu_selected == 0     ? AUTO_SETUP
-                          : app.menu_selected == 1   ? FILES
-                            : app.menu_selected == 2 ? ERASE_TARGET
-                                                     : INFO;
-      app.confirm_armed = false;
-      app.hold_start    = 0;
-      if (app.screen == FILES)
+    case HOME:
+      if (back)
       {
-        progScanProjects();
+        progOpen(MENU);
       }
-      app.dirty = true;
-    }
-  }
-  else if (app.screen == INFO)
-  {
-    if (pressed & (1U << BTN_M))
-    {
-      app.screen = MENU;
-      app.dirty  = true;
-    }
-  }
-  else if (app.screen == FILES)
-  {
-    if (pressed & (1U << BTN_M))
-    {
-      app.screen = MENU;
-      app.dirty  = true;
-    }
-    else if (app.mounted && app.count)
-    {
-      if (pressed & (1U << BTN_UP))
+      else if (open && app.mounted)
       {
-        app.selected = (app.selected + app.count - 1) % app.count;
-        app.dirty    = true;
-      }
-      if (pressed & (1U << BTN_DN))
-      {
-        app.selected = (app.selected + 1) % app.count;
-        app.dirty    = true;
-      }
-      if (pressed & (1U << BTN_SEL))
-      {
-        app.stage    = "OPEN PROJECT";
-        app.error[0] = 0;
-        memset(&app.result, 0, sizeof(app.result));
-        bool ok = progLoadManifest(app.ids[app.selected]);
-        if (ok && !app.esp_project)
+        if (progAutoAssigned())
         {
-          char    path[128];
-          FILINFO info;
-          snprintf(path, sizeof(path), "/prog/fw/%s/%s", app.ids[app.selected], app.manifest.image);
-          FRESULT e = f_stat(path, &info);
-          if (e != FR_OK)
-          {
-            ok = progIoFail(path, e);
-          }
-          else if ((info.fattrib & AM_DIR) || info.fsize < 8 || info.fsize > 0x100000)
-          {
-            ok = progFail("Invalid image size");
-          }
-          else
-          {
-            app.image_size = (uint32_t)info.fsize;
-          }
-        }
-        app.screen        = ok ? CONFIRM : RESULT;
-        app.confirm_armed = false;
-        app.hold_start    = 0;
-        app.dirty         = true;
-      }
-    }
-  }
-  else if (app.screen == AUTO_SETUP)
-  {
-    if (pressed & (1U << BTN_M))
-    {
-      app.screen = MENU;
-    }
-    else if (pressed & (1U << BTN_UP))
-    {
-      app.auto_selected = (app.auto_selected + PROG_AUTO_TARGETS - 1) % PROG_AUTO_TARGETS;
-    }
-    else if (pressed & (1U << BTN_DN))
-    {
-      app.auto_selected = (app.auto_selected + 1) % PROG_AUTO_TARGETS;
-    }
-    else if (pressed & (1U << BTN_SEL))
-    {
-      app.auto_target = app.auto_selected;
-      progAutoProjects();
-      app.screen = AUTO_FILES;
-    }
-    app.dirty |= pressed != 0;
-  }
-  else if (app.screen == AUTO_FILES)
-  {
-    if (pressed & (1U << BTN_M))
-    {
-      app.screen = AUTO_SETUP;
-    }
-    else if (app.mounted)
-    {
-      if (pressed & (1U << BTN_UP))
-      {
-        app.selected = (app.selected + app.count) % (app.count + 1);
-      }
-      else if (pressed & (1U << BTN_DN))
-      {
-        app.selected = (app.selected + 1) % (app.count + 1);
-      }
-      else if (pressed & (1U << BTN_SEL))
-      {
-        if (progAutoSave(app.selected ? app.ids[app.selected - 1] : ""))
-        {
-          app.screen = AUTO_SETUP;
-          buzzerBeep(60);
+          progRunAuto();
         }
         else
         {
-          snprintf(app.error, sizeof(app.error), "Save failed");
+          progOpenChips(PICK_AUTO);
         }
       }
-    }
-    app.dirty |= pressed != 0 || (uint32_t)(millis() - app.draw_time) >= 400;
-  }
-  else if (app.screen == ERASE_TARGET)
-  {
-    if (pressed & (1U << BTN_M))
-    {
-      app.screen = MENU;
-      app.dirty  = true;
-    }
-    else
-    {
-      if (pressed & (1U << BTN_UP))
+      break;
+    case MENU:
+      if (back)
       {
-        app.erase_target = (app.erase_target + 3) % 4;
-        app.dirty        = true;
+        progOpen(HOME);
       }
-      if (pressed & (1U << BTN_DN))
+      else if (!progStep(&app.menu_selected, 6, pressed) && open)
       {
-        app.erase_target = (app.erase_target + 1) % 4;
-        app.dirty        = true;
+        static const screen_t next[] = {CHIPS, MANUAL, STORAGE, NETWORK, POWER, INFO};
+        app.auto_job                 = false;
+        if (app.menu_selected == 0)
+        {
+          progOpenChips(PICK_AUTO);
+        }
+        else
+        {
+          app.net_poll = millis() - NET_POLL_MS; /* Network pages show fresh state at once. */
+          progOpen(next[app.menu_selected]);
+        }
       }
-      if (pressed & (1U << BTN_SEL))
+      break;
+    case MANUAL:
+      if (back)
       {
-        app.screen        = ERASE_CONFIRM;
-        app.confirm_armed = false;
-        app.hold_start    = 0;
-        app.dirty         = true;
+        progOpen(MENU);
       }
-    }
-  }
-  else if (app.screen == CONFIRM || app.screen == ERASE_CONFIRM)
-  {
-    if (pressed & (1U << BTN_M))
-    {
-      app.screen = app.erase_job ? ERASE_TARGET : FILES;
-      app.dirty  = true;
-    }
-    else if (!app.mounted && !progIsEspErase())
-    {
-      app.confirm_armed = false;
-      app.hold_start    = 0;
-    }
-    else if (!(buttons & (1U << BTN_SEL)))
-    {
-      app.confirm_armed = true;
-      app.hold_start    = 0;
-    }
-    else if (app.confirm_armed)
-    {
-      if (!app.hold_start)
+      else if (!progStep(&app.manual_selected, 2, pressed) && open)
       {
-        app.hold_start = millis();
+        progOpenChips(app.manual_selected ? PICK_ERASE : PICK_FLASH);
       }
-      if ((uint32_t)(millis() - app.hold_start) >= 1000)
+      break;
+    case STORAGE:
+      if (back)
       {
-        progRunJob();
+        progOpen(MENU);
       }
-    }
-  }
-  else if (app.screen == RESULT && (pressed & ((1U << BTN_SEL) | (1U << BTN_M))))
-  {
-    if (app.auto_job)
-    {
-      if ((pressed & (1U << BTN_M)) || !app.error[0]) /* PASS returns home; the next unit starts from there. */
+      else if (!progStep(&app.storage_selected, 2, pressed) && open)
       {
-        app.auto_job = false;
-        app.screen   = HOME;
-        app.dirty    = true;
+        if (app.storage_selected)
+        {
+          app.job = JOB_WIPE;
+          progOpen(WIPE_CONFIRM);
+        }
+        else
+        {
+          progOpenChips(PICK_INSTALLED);
+        }
+      }
+      break;
+    case POWER:
+      if (back)
+      {
+        progOpen(MENU);
+      }
+      else if (!progStep(&app.power_selected, 3, pressed) && open)
+      {
+        if (app.power_selected == 0)
+        {
+          app.power.out_3v3 = !app.power.out_3v3;
+        }
+        else if (app.power_selected == 1)
+        {
+          app.power.out_5v = !app.power.out_5v;
+        }
+        else
+        {
+          app.power.mode = app.power.mode == PROG_POWER_ALWAYS ? PROG_POWER_JOB : PROG_POWER_ALWAYS;
+        }
+        progPowerChange();
+        buzzerBeep(app.power_saved ? 60 : 400);
+      }
+      break;
+    case INFO:
+      if (back)
+      {
+        progOpen(MENU);
+      }
+      break;
+    case CHIPS:
+      if (back)
+      {
+        progOpen(app.pick == PICK_AUTO        ? MENU
+                 : app.pick == PICK_INSTALLED ? STORAGE
+                 : app.pick == PICK_HUB       ? NETWORK
+                                              : MANUAL);
+      }
+      else if ((app.mounted || app.pick == PICK_ERASE || app.pick == PICK_HUB) &&
+               !progStep(&app.target, progChipRows(), pressed) && open)
+      {
+        if (app.pick == PICK_ERASE)
+        {
+          app.job = JOB_ERASE;
+          progOpen(ERASE_CONFIRM);
+        }
+        else if (app.pick == PICK_HUB)
+        {
+          progOpenHubList();
+        }
+        else
+        {
+          progOpenPackages();
+        }
+      }
+      break;
+    case PACKAGES:
+      if (back)
+      {
+        progOpen(CHIPS);
+      }
+      else if (app.mounted && !progStep(&app.selected, progPackageRows(), pressed) && open && progPackageRows())
+      {
+        progSelectPackage();
+      }
+      break;
+    case DETAILS:
+      if (back)
+      {
+        progOpen(PACKAGES);
       }
       else
       {
-        progRunAuto();
+        progStep(&app.selected, progPackageRows(), pressed);
       }
-    }
-    else
-    {
-      app.screen = app.erase_job ? MENU : FILES;
-      progScanProjects();
-    }
+      break;
+    case NETWORK:
+      if (back)
+      {
+        progOpen(MENU);
+      }
+      else if (!progStep(&app.network_selected, 3, pressed) && open)
+      {
+        if (app.network_selected == 0)
+        {
+          progOpen(CONNECT);
+        }
+        else if (app.network_selected == 1)
+        {
+          app.job = JOB_HUB_LIST;
+          progRunJob();
+        }
+        else
+        {
+          progOpen(NET_STATUS);
+        }
+      }
+      break;
+    case CONNECT:
+      if (back)
+      {
+        progOpen(NETWORK);
+      }
+      else if (!progStep(&app.connect_selected, 3, pressed) && open)
+      {
+        if (app.connect_selected == 0)
+        {
+          app.job = JOB_SCAN;
+          progRunJob();
+        }
+        else if (app.connect_selected == 1)
+        {
+          app.apn_selected = 0;
+          for (unsigned i = 0; i < net_apn_count; i++)
+          {
+            if (!strcmp(netSettings()->apn, net_apns[i].apn))
+            {
+              app.apn_selected = i;
+            }
+          }
+          progOpen(APN_LIST);
+        }
+        else
+        {
+          uint8_t status        = netOff();
+          netSettings()->mode   = NET_MODE_OFF;
+          app.job               = JOB_NET_OFF;
+          app.auto_job          = false;
+          bool ok               = status == NET_ST_OK || progFail(netStatusText(status));
+          netSettingsSave();
+          progFinish(ok);
+        }
+      }
+      break;
+    case WIFI_LIST:
+      if (back)
+      {
+        progOpen(CONNECT);
+      }
+      else if (!progStep(&app.ap_selected, app.ap_count + 1, pressed) && open)
+      {
+        progSelectWifi();
+      }
+      break;
+    case KEYBOARD:
+      progKeyboardKeys(buttons, pressed, released);
+      break;
+    case APN_LIST:
+      if (back)
+      {
+        progOpen(CONNECT);
+      }
+      else if (!progStep(&app.apn_selected, net_apn_count, pressed) && open)
+      {
+        snprintf(app.join_secret, sizeof(app.join_secret), "%s", net_apns[app.apn_selected].apn);
+        app.join_mode = NET_MODE_LTE;
+        app.job       = JOB_JOIN;
+        progRunJob();
+      }
+      break;
+    case NET_STATUS:
+      if (back)
+      {
+        progOpen(NETWORK);
+      }
+      break;
+    case HUB_LIST:
+      if (back)
+      {
+        progOpen(CHIPS);
+      }
+      else if (!progStep(&app.hub_selected, app.hub_view_count, pressed) && open && app.hub_view_count)
+      {
+        app.job = JOB_INSTALL;
+        progOpen(HUB_CONFIRM);
+      }
+      break;
+    case HUB_CONFIRM:
+      if (back)
+      {
+        progOpen(HUB_LIST);
+      }
+      else
+      {
+        progHold(buttons, !progHubBlocked(progHubAt(app.hub_selected)));
+      }
+      break;
+    case CONFIRM:
+    case ERASE_CONFIRM:
+    case WIPE_CONFIRM:
+      if (back)
+      {
+        progOpen(app.screen == CONFIRM ? PACKAGES : app.screen == ERASE_CONFIRM ? CHIPS : STORAGE);
+      }
+      else
+      {
+        progHold(buttons, app.mounted || progIsEspErase());
+      }
+      break;
+    case RESULT:
+      if (!back && !open)
+      {
+        break;
+      }
+      if (app.auto_job)
+      {
+        if (back || !app.error[0]) /* PASS returns home; the next unit starts from there. */
+        {
+          app.auto_job = false;
+          progOpen(HOME);
+        }
+        else
+        {
+          progRunAuto();
+        }
+      }
+      else
+      {
+        progRefresh();
+        progOpen(progResultBack());
+      }
+      break;
+    case RUNNING:
+      break;
   }
-  if ((uint32_t)(millis() - app.draw_time) >= FRAME_MS &&
-      (progAnim().active || (app.sel_screen == app.screen && (uint32_t)(millis() - app.sel_start) < SLIDE_MS + FRAME_MS)))
+  uint32_t idle = millis() - app.draw_time;
+  if ((idle >= FRAME_MS &&
+       (progAnim().active || (app.sel_screen == app.screen && (uint32_t)(millis() - app.sel_start) < SLIDE_MS + FRAME_MS))) ||
+      (app.marquee && idle >= SCROLL_MS))
   {
     app.dirty = true;
   }
   progDraw();
 }
 
+/* CLI changes the catalog or the loaded package underneath the OLED, so screens that show them start over. */
+static void progCliReset(void)
+{
+  if (app.screen == CONFIRM || app.screen == ERASE_CONFIRM || app.screen == WIPE_CONFIRM || app.screen == RESULT ||
+      app.screen == DETAILS)
+  {
+    app.auto_job = false;
+    progOpen(HOME);
+  }
+  app.confirm_armed = false;
+  app.dirty         = true;
+}
+
 static void cliProg(cli_args_t *args)
 {
   if (args->argc == 1 && args->isStr(0, "list"))
   {
-    progScanProjects();
-    if (app.screen == AUTO_FILES)
+    progRefresh();
+    progCliReset();
+    if (app.catalog_error)
     {
-      app.screen = AUTO_SETUP;
+      cliPrintf("SD error %u while reading /prog/fw\n", app.catalog_error);
     }
-    if (app.screen == CONFIRM || app.screen == ERASE_CONFIRM || app.screen == RESULT)
+    for (unsigned i = 0; i < app.catalog.count; i++)
     {
-      app.screen        = HOME;
-      app.confirm_armed = false;
+      const prog_catalog_entry_t *entry = &app.catalog.entries[i];
+      const prog_target_info_t   *chip  = progTargetInfo(entry->target);
+      cliPrintf("%-10s %-24s %-12s %s%s%s\n", chip ? chip->chip : "unknown", entry->id,
+                entry->version[0] ? entry->version : "-", entry->name, entry->error ? "  ! " : "",
+                entry->error ? entry->error : "");
     }
-    for (unsigned i = 0; i < app.count; i++)
-    {
-      cliPrintf("%s\n", app.ids[i]);
-    }
-    cliPrintf("%u projects%s\n", app.count, app.more ? " (limit 16; more omitted)" : "");
+    cliPrintf("%u projects%s\n", app.catalog.count,
+              app.catalog.more ? " (limit 16; smallest IDs kept, more omitted)" : "");
     return;
   }
   if (args->argc == 2 && args->isStr(0, "check"))
@@ -1807,10 +3070,7 @@ static void cliProg(cli_args_t *args)
       ok = false;
     }
     cliPrintf("CHECK    : %s (SD files only; target flash not modified)\n", ok ? "OK" : "FAILED");
-    app.auto_job  = false;
-    app.erase_job = false;
-    app.screen    = FILES;
-    app.dirty     = true;
+    progCliReset();
     return;
   }
   cliPrintf("prog list\nprog check <project>\nUse OLED: UP/DN, SEL, then hold SEL 1s to write.\n");
@@ -1820,8 +3080,8 @@ static void cliEsp(cli_args_t *args)
 {
   if (args->argc == 1 && args->isStr(0, "info"))
   {
-    cliPrintf("ESP five-pin: CLK/PB4=TX, SWO/PC1=RX, nRESET/PB3=EN, DIO/PB1=BOOT, GND\n"
-              "Connect at 115200 8N1; Flash/Erase link test up to 921600. Target powered separately.\n"
+    cliPrintf("ESP pins: CLK/PB4=TX, SWO/PC1=RX, nRESET/PB3=EN, DIO/PB1=BOOT, GND\n"
+              "Connect at 115200 8N1; Flash/Erase link test up to 921600. Target supply: see 'power'.\n"
               "ESP32/S3 BOOT=GPIO0; C3 BOOT=GPIO9. CLI USART1 remains available.\n");
     return;
   }
@@ -1836,8 +3096,46 @@ static void cliEsp(cli_args_t *args)
   cliPrintf("esp info\nesp probe (resets target, no flash write)\n");
 }
 
+/* Same settings as the Power menu, saved to the card the same way. */
+static void cliPower(cli_args_t *args)
+{
+  bool output = args->argc == 2 && (args->isStr(0, "3v3") || args->isStr(0, "5v"));
+  if (output && (args->isStr(1, "on") || args->isStr(1, "off")))
+  {
+    bool *out = args->isStr(0, "3v3") ? &app.power.out_3v3 : &app.power.out_5v;
+    *out      = args->isStr(1, "on");
+    progPowerChange();
+  }
+  else if (args->argc == 2 && args->isStr(0, "mode") && (args->isStr(1, "job") || args->isStr(1, "always")))
+  {
+    app.power.mode = args->isStr(1, "always") ? PROG_POWER_ALWAYS : PROG_POWER_JOB;
+    progPowerChange();
+  }
+  else if (args->argc != 0)
+  {
+    cliPrintf("power\npower 3v3|5v on|off\npower mode job|always\n");
+    return;
+  }
+  cliPrintf("SETTING  : 3V3=%s 5V=%s, supply=%s, %s\n", app.power.out_3v3 ? "ON" : "OFF",
+            app.power.out_5v ? "ON" : "OFF", app.power.mode == PROG_POWER_ALWAYS ? "always" : "during jobs",
+            app.power_saved ? "saved on SD" : "NOT saved (no SD)");
+  cliPrintf("OUTPUT   : 3V_OUT(PB5)=%s 5V_OUT(PA9)=%s\n", gpioPinRead(TARGET_3V3) ? "ON" : "OFF",
+            gpioPinRead(TARGET_5V) ? "ON" : "OFF");
+}
+
+/* Keeps network job animations moving while a request waits on the ESP; drawing only, no input. */
+static void progNetIdle(void)
+{
+  if (app.screen == RUNNING && (uint32_t)(millis() - app.draw_time) >= RUN_FRAME_MS)
+  {
+    app.dirty = true;
+    progDraw();
+  }
+}
+
 static bool progInit(void)
 {
+  netSetIdleHook(progNetIdle);
   app.dirty         = true;
   app.stage         = "IDLE";
   app.last_buttons  = buttonGetData();
@@ -1845,9 +3143,15 @@ static bool progInit(void)
   app.menu_selected = 0;
   app.detected      = sdIsDetected();
   app.mounted       = app.detected && fatfsIsMount();
-  progScanProjects();
+  progRefresh();
   progAutoLoad();
+  app.power_saved = true; /* Nothing to save yet: all off, as the gate pull-downs hold it. */
+  if (app.mounted)
+  {
+    progPowerReload();
+  }
   bool ok = cliAdd("prog", cliProg);
+  ok      = cliAdd("power", cliPower) && ok;
   return cliAdd("esp", cliEsp) && ok;
 }
 

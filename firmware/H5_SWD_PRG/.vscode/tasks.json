@@ -9,7 +9,7 @@
         "-S",
         ".",
         "-B",
-        "build-swd",
+        "build",
         "-G",
         "Ninja"
       ],
@@ -24,7 +24,7 @@
       "command": "cmake",
       "args": [
         "--build",
-        "build-swd",
+        "build",
         "--parallel"
       ],
       "dependsOn": "build-configure",
@@ -45,7 +45,7 @@
       "command": "cmake",
       "args": [
         "--build",
-        "build-swd",
+        "build",
         "--target",
         "clean"
       ],
